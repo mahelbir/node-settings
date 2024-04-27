@@ -1,6 +1,6 @@
 {
   "name": "@mahelbir/settings",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": false,
   "description": "Settings is a lightweight JSON configuration file loader",
   "keywords": [
