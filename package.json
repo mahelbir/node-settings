@@ -1,0 +1,42 @@
+{
+  "name": "@mahelbir/settings",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Settings is a lightweight JSON configuration file loader",
+  "keywords": [
+    "json config",
+    "settings",
+    "config file"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mahelbir/node-settings.git"
+  },
+  "author": "Mahmuthan Elbir",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "lib/**/*"
+  ],
+  "exports": {
+    ".": {
+      "import": "./lib/esm/index.js",
+      "require": "./lib/cjs/index.js"
+    }
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "cross-env BABEL_ENV=esm babel ./src --out-dir ./lib/esm",
+    "build:cjs": "cross-env BABEL_ENV=cjs babel ./src --out-dir ./lib/cjs",
+    "test": "node test/script.js"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.23.4",
+    "@babel/core": "^7.23.3",
+    "@babel/preset-env": "^7.23.3",
+    "cross-env": "^7.0.3"
+  }
+}
