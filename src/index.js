@@ -2,6 +2,7 @@ import fs from "fs";
 
 import _get from "lodash/get.js";
 import _set from "lodash/set.js";
+import _unset from "lodash/unset.js";
 import forOwn from "lodash/forOwn.js";
 import isObject from "lodash/isObject.js";
 import isArray from "lodash/isArray.js";
@@ -49,6 +50,14 @@ class Settings {
 
     get(key, defaultValue = null) {
         return _get(this._settings, key, defaultValue);
+    }
+
+    unset(key) {
+        _unset(this._settings, key);
+    }
+
+    memory() {
+        return this._settings;
     }
 
     all() {

@@ -1,6 +1,6 @@
 {
   "name": "@mahelbir/settings",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": false,
   "description": "Settings is a lightweight JSON configuration file loader",
   "keywords": [
@@ -34,9 +34,9 @@
     "lodash": "^4.17.21"
   },
   "devDependencies": {
-    "@babel/cli": "^7.23.4",
-    "@babel/core": "^7.23.3",
-    "@babel/preset-env": "^7.23.3",
+    "@babel/cli": "^7.27.2",
+    "@babel/core": "^7.27.1",
+    "@babel/preset-env": "^7.27.2",
     "cross-env": "^7.0.3"
   }
 }
