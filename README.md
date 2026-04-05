@@ -1,66 +1,85 @@
 # NODE-SETTINGS
 
-Settings is a lightweight JSON configuration file loader
+A lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability.
 
 ## Installation
 
-To install use npm:
-
 ```bash
-npm i @mahelbir/settings
+npm install @mahelbir/settings
+```
+
+## Quick Start
+
+```javascript
+import { Settings } from "@mahelbir/settings";
+
+const config = new Settings("./config.json");
+
+// Deep get & set with dot notation
+config.get("database.host");             // "localhost"
+config.set("database.port", 5432);
+config.save();                           // Persist changes to file
 ```
 
 ## Usage
 
+### Instance Mode
+
+Create a `Settings` instance to read and manipulate a specific JSON file.
+
 ```javascript
-import {setDefaultFile, initSettings, Settings} from "@mahelbir/settings";
-import settings from "@mahelbir/settings";
+import { Settings } from "@mahelbir/settings";
 
-/* New Instance */
-{
-    const settings = new Settings("./configs/settings.json");
+const config = new Settings("./config.json");
 
-    console.log("example->a->b", settings.get("example.a.b")); // Deep get
-    settings.set("secondKey", ["test"]);
-    console.log("secondKey", settings.get("secondKey[0]"));
-    settings.set("thirdKey", ["test"]);
-    settings.unset("thirdKey", ["test"]);
-    console.log("thirdKey", settings.get("thirdKey"));
-
-    // This will return the current object
-    console.log(settings.memory());
-
-    // if you don't call save, the file will not be updated but the object will be updated
-    settings.save();
-}
-
-/* Continuously updated instance */
-{
-    // Set the default file for the settings
-    setDefaultFile("./configs/new.json");
-
-    initSettings(3); // This will get the current settings from the default file every 3 seconds
-    // You have to call settings() to get the current settings
-
-    console.log(settings().all()); // This will return whole settings
-
-    // Even if external factors change the file, the settings are still up-to-date with the changed file
-    let isChanged = false;
-    let firstValue = settings().get("data.time");
-    setInterval(() => {
-        const currentValue = settings().get("data.time");
-        if (firstValue !== currentValue) {
-            isChanged = true;
-        }
-        console.log("isChanged", isChanged);
-    }, 1000);
-}
-
-/* Example of external change */
-setTimeout(() => {
-    Settings.put({"data.time": Date.now()}); // "isChanged" will be true after 5 seconds
-}, 5000);
+config.get("app.name");                  // Deep get
+config.get("app.debug", false);          // With default value
+config.set("app.version", "2.0.0");      // Deep set
+config.unset("app.deprecated");          // Remove a key
+config.all();                            // Flat key-value map of all settings
+config.memory();                         // Raw settings object reference
+config.save();                           // Write changes to file
 ```
+
+### Singleton Mode (Auto-Refresh)
+
+Keep settings in sync with the file on disk. Ideal for long-running processes where config may be updated externally.
+
+```javascript
+import settings, { initSettings } from "@mahelbir/settings";
+
+// Re-reads the file every 10 seconds (default)
+initSettings(10, "./config.json");
+
+// Access current settings anywhere
+settings().get("feature.enabled");
+```
+
+### Static Write
+
+Write key-value pairs to a config file without creating an instance.
+
+```javascript
+import { Settings } from "@mahelbir/settings";
+
+Settings.put({ "app.version": "2.1.0", "app.updatedAt": Date.now() }, "./config.json");
+```
+
+## API
+
+| Method                          | Description                                                 |
+|---------------------------------|-------------------------------------------------------------|
+| `new Settings(file?)`           | Create instance, reads from file (default: `settings.json`) |
+| `get(key, default?)`            | Get value by dot-notation key                               |
+| `set(key, value)`               | Set value by dot-notation key                               |
+| `unset(key)`                    | Remove a key                                                |
+| `save()`                        | Write current state to file                                 |
+| `memory()`                      | Return raw internal settings object (mutable)               |
+| `all()`                         | Return flat key-value map with dot-notation keys            |
+| `Settings.put(params, file?)`   | Static: write key-value pairs to file                       |
+| `initSettings(seconds?, file?)` | Start auto-refreshing singleton                             |
+| `settings()`                    | Get current singleton instance                              |
+| `setDefaultFile(file)`          | Change default file path                                    |
 
 ## License
 
