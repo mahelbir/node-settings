@@ -1,5 +1,4 @@
-import {setDefaultFile, initSettings, Settings} from "../src/index.js";
-import settings from "../src/index.js";
+import {setDefaultFile, initSettings, settings, Settings} from "../src/index.js";
 
 
 /* New Instance */
@@ -14,7 +13,7 @@ import settings from "../src/index.js";
     console.log("thirdKey", settings.get("thirdKey"));
 
     // This will return the current object
-    console.log(settings.memory());
+    console.log(settings.raw());
 
     // if you don't call save, the file will not be updated but the object will be updated
     settings.save();

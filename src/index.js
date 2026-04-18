@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 
 import _get from "lodash/get.js";
 import _set from "lodash/set.js";
@@ -8,28 +9,32 @@ import isObject from "lodash/isObject.js";
 import isArray from "lodash/isArray.js";
 
 
-let aliveSettings = null;
+let instance = null;
+let defaultFile = path.resolve("./settings.json");
 
-let defaultFile = "settings.json";
 
-function setDefaultFile(file) {
-    defaultFile = file;
+export function setDefaultFile(file) {
+    file = file?.trim();
+    if (!file || typeof file !== "string") {
+        throw new TypeError("Settings.setDefaultFile: file must be a non-empty string path");
+    }
+    defaultFile = path.resolve(file);
 }
 
-function initSettings(seconds = 10, file = null) {
-    file && setDefaultFile(file);
-    aliveSettings = new Settings();
-    console.info("Settings initialized,", defaultFile);
-    setInterval(() => {
-        aliveSettings = new Settings();
-    }, seconds * 1000);
+export function initSettings(intervalSeconds = 1) {
+    instance = new Settings();
+    console.info(`Settings initialized`, defaultFile, `(refresh: ${intervalSeconds}s)`);
+    return setInterval(() => {
+        instance = new Settings();
+    }, intervalSeconds * 1000);
 }
 
-function settings() {
-    return aliveSettings;
+export function settings() {
+    return instance;
 }
 
-class Settings {
+export class Settings {
+
     constructor(file = null) {
         this._file = file || defaultFile;
         try {
@@ -44,19 +49,19 @@ class Settings {
         fs.writeFileSync(this._file, JSON.stringify(this._settings));
     }
 
-    set(key, value) {
-        _set(this._settings, key, value);
+    get(key, defaultValue = undefined) {
+        return _get(this._settings, key, defaultValue);
     }
 
-    get(key, defaultValue = null) {
-        return _get(this._settings, key, defaultValue);
+    set(key, value) {
+        _set(this._settings, key, value);
     }
 
     unset(key) {
         _unset(this._settings, key);
     }
 
-    memory() {
+    raw() {
         return this._settings;
     }
 
@@ -91,11 +96,4 @@ class Settings {
 
 }
 
-export {
-    setDefaultFile,
-    initSettings,
-    settings,
-    Settings
-}
-
-export default settings;
+export default Settings;
