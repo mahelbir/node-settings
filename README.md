@@ -1,6 +1,6 @@
 # NODE-SETTINGS
 
-A lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability.
+Lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability.
 
 ## Installation
 

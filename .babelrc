@@ -12,6 +12,8 @@
         ]
       ],
       "plugins": [
+        "babel-plugin-transform-import-meta",
+        ["babel-plugin-replace-import-extension", {"extMapping": {".js": ".cjs"}}]
       ]
     },
     "esm": {
@@ -27,6 +29,7 @@
         ]
       ],
       "plugins": [
+        ["babel-plugin-replace-import-extension", {"extMapping": {".js": ".mjs"}}]
       ]
     }
   }
