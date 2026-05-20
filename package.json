@@ -1,5 +1,6 @@
 {
   "name": "@mahelbir/settings",
+  "version": "3.0.0",
   "private": false,
   "description": "Lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability",
   "keywords": [
@@ -11,38 +12,34 @@
     "type": "git",
     "url": "git+https://github.com/mahelbir/node-settings.git"
   },
-  "author": "Mahmuthan Elbir",
   "license": "MIT",
+  "author": "Mahmuthan Elbir",
   "type": "module",
-  "files": [
-    "lib/**/*"
-  ],
   "exports": {
     ".": {
-      "import": "./lib/esm/index.mjs",
-      "require": "./lib/cjs/index.cjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
     }
   },
-  "publishConfig": {
-    "access": "public"
-  },
+  "files": [
+    "dist/**/*"
+  ],
   "scripts": {
-    "build:esm": "npx cross-env BABEL_ENV=esm babel ./src --out-dir ./lib/esm --out-file-extension .mjs",
-    "build:cjs": "npx cross-env BABEL_ENV=cjs babel ./src --out-dir ./lib/cjs --out-file-extension .cjs",
-    "build": "npm run build:esm && npm run build:cjs",
-    "test": "node --test 'tests/**/*.test.js'",
-    "prepublishOnly": "npm run build && npm test"
+    "build": "tsdown",
+    "test": "node --test",
+    "prepublishOnly": "npm run build && npm test",
+    "relock": "rm -rf node_modules package-lock.json && NODE_ENV= npm install --include=dev --include=optional"
   },
   "dependencies": {
     "lodash": "4.18.1"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.6",
-    "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.5",
-    "babel-plugin-replace-import-extension": "^1.1.5",
-    "babel-plugin-transform-import-meta": "^2.3.3",
-    "cross-env": "^10.1.0"
+    "tsdown": "^0.22.0"
   },
-  "version": "3.0.0"
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

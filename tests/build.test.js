@@ -5,8 +5,8 @@ import {fileURLToPath} from "node:url";
 import path from "node:path";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const ESM_PATH = path.join(ROOT, "lib/esm/index.mjs");
-const CJS_PATH = path.join(ROOT, "lib/cjs/index.cjs");
+const ESM_PATH = path.join(ROOT, "dist/index.mjs");
+const CJS_PATH = path.join(ROOT, "dist/index.cjs");
 
 const buildAvailable = existsSync(ESM_PATH) && existsSync(CJS_PATH);
 const skipReason = buildAvailable ? false : "build artifacts missing — run `npm run build` first";

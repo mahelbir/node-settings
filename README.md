@@ -1,11 +1,13 @@
-# NODE-SETTINGS
+# node-settings
+
+[![npm version](https://img.shields.io/npm/v/@mahelbir/settings.svg)](https://www.npmjs.com/package/@mahelbir/settings)
 
 Lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability.
 
 ## Installation
 
 ```bash
-npm install @mahelbir/settings
+npm i @mahelbir/settings
 ```
 
 ## Quick Start
