@@ -91,6 +91,20 @@ describe("Settings instance", () => {
         assert.deepEqual(flat.tags, ["x", "y"]);
     });
 
+    test("all keeps dotted keys intact inside nested objects", () => {
+        const fp = fixture("s.json", {outer: {"a.b": 1}});
+        const s = new Settings(fp);
+        assert.equal(s.all()["outer.a.b"], 1);
+    });
+
+    test("all preserves empty nested objects as leaves", () => {
+        const fp = fixture("s.json", {x: {}, y: {z: 5}});
+        const s = new Settings(fp);
+        const flat = s.all();
+        assert.deepEqual(flat.x, {});
+        assert.equal(flat["y.z"], 5);
+    });
+
     test("constructor returns empty object when file is missing", (t) => {
         suppressConsole(t, "error");
         const fp = path.join(tmpDir, "absent.json");
@@ -107,6 +121,17 @@ describe("Settings.put", () => {
         const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
         assert.equal(raw.foo, "bar");
         assert.equal(raw.nested.key, 42);
+    });
+
+    test("ignores inherited (prototype-chain) keys", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "put-proto.json");
+        const params = Object.create({inherited: "nope"});
+        params.own = "yes";
+        Settings.put(params, fp);
+        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
+        assert.equal(raw.own, "yes");
+        assert.equal("inherited" in raw, false);
     });
 });
 
@@ -127,5 +152,41 @@ describe("singleton mode", () => {
         assert.throws(() => setDefaultFile(""), TypeError);
         assert.throws(() => setDefaultFile("   "), TypeError);
         assert.throws(() => setDefaultFile(null), TypeError);
+    });
+
+    test("setDefaultFile throws a descriptive TypeError for non-string input", () => {
+        assert.throws(() => setDefaultFile(123), {name: "TypeError", message: /non-empty string/});
+        assert.throws(() => setDefaultFile({}), {name: "TypeError", message: /non-empty string/});
+    });
+
+    test("initSettings clears the previous interval when called again", (t) => {
+        suppressConsole(t, "info");
+        const fp = fixture("def.json", {key: "value"});
+        setDefaultFile(fp);
+        let nextId = 1;
+        t.mock.method(globalThis, "setInterval", () => nextId++);
+        const cleared = [];
+        t.mock.method(globalThis, "clearInterval", (h) => cleared.push(h));
+        const first = initSettings(60);
+        cleared.length = 0;
+        initSettings(60);
+        assert.deepEqual(cleared, [first]);
+    });
+
+    test("interval refresh keeps last good data when the file becomes unreadable", (t) => {
+        suppressConsole(t, "info");
+        suppressConsole(t, "error");
+        t.mock.timers.enable({apis: ["setInterval"]});
+        const fp = fixture("def.json", {key: "value"});
+        setDefaultFile(fp);
+        const handle = initSettings(1);
+        try {
+            assert.equal(settings().get("key"), "value");
+            fs.rmSync(fp);
+            t.mock.timers.tick(1000);
+            assert.equal(settings().get("key"), "value");
+        } finally {
+            clearInterval(handle);
+        }
     });
 });

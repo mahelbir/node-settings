@@ -7,26 +7,34 @@ import _unset from "lodash/unset.js";
 import forOwn from "lodash/forOwn.js";
 import isObject from "lodash/isObject.js";
 import isArray from "lodash/isArray.js";
+import isEmpty from "lodash/isEmpty.js";
 
 
 let instance = null;
+let refreshTimer = null;
 let defaultFile = path.resolve("./settings.json");
 
 
 export function setDefaultFile(file) {
-    file = file?.trim();
-    if (!file || typeof file !== "string") {
+    if (typeof file !== "string" || !file.trim()) {
         throw new TypeError("Settings.setDefaultFile: file must be a non-empty string path");
     }
-    defaultFile = path.resolve(file);
+    defaultFile = path.resolve(file.trim());
 }
 
 export function initSettings(intervalSeconds = 1) {
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+    }
     instance = new Settings();
     console.info(`Settings initialized`, defaultFile, `(refresh: ${intervalSeconds}s)`);
-    return setInterval(() => {
-        instance = new Settings();
+    refreshTimer = setInterval(() => {
+        const next = new Settings();
+        if (next._loaded) {
+            instance = next;
+        }
     }, intervalSeconds * 1000);
+    return refreshTimer;
 }
 
 export function settings() {
@@ -39,9 +47,11 @@ export class Settings {
         this._file = file || defaultFile;
         try {
             this._settings = JSON.parse(fs.readFileSync(this._file, {encoding: 'utf-8'}));
+            this._loaded = true;
         } catch (e) {
             console.error("Settings.parse", e);
             this._settings = {};
+            this._loaded = false;
         }
     }
 
@@ -66,31 +76,26 @@ export class Settings {
     }
 
     all() {
-        const params = this._settings;
-        const getAllKeys = (obj, path = '', keys = []) => {
+        const result = {};
+        const flatten = (obj, prefix = '') => {
             forOwn(obj, (value, key) => {
-                let newPath = path ? `${path}.${key}` : key;
-                if (isObject(value) && !isArray(value)) {
-                    getAllKeys(value, newPath, keys);
+                const newPath = prefix ? `${prefix}.${key}` : key;
+                if (isObject(value) && !isArray(value) && !isEmpty(value)) {
+                    flatten(value, newPath);
                 } else {
-                    keys.push(newPath);
+                    result[newPath] = value;
                 }
             });
-            return keys;
-        }
-        const keys = getAllKeys(params);
-        return keys.reduce((accumulator, key) => {
-            accumulator[key] = _get(params, key);
-            return accumulator;
-        }, {});
+        };
+        flatten(this._settings);
+        return result;
     }
 
     static put(params, file = null) {
         const settings = new Settings(file);
-        for (const key in params) {
-            const value = params[key];
+        forOwn(params, (value, key) => {
             settings.set(key, value);
-        }
+        });
         settings.save();
     }
 
