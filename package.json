@@ -1,6 +1,6 @@
 {
   "name": "@mahelbir/settings",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "private": false,
   "description": "Lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability",
   "keywords": [
