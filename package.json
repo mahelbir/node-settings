@@ -31,10 +31,10 @@
     "relock": "rm -rf node_modules package-lock.json && NODE_ENV= npm install --include=dev --include=optional"
   },
   "dependencies": {
-    "lodash": "4.18.1"
+    "es-toolkit": "^1.47.0"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0"
+    "tsdown": "^0.22.2"
   },
   "engines": {
     "node": ">=18.0.0"

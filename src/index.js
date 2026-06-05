@@ -1,13 +1,12 @@
 import fs from "fs";
 import path from "path";
 
-import _get from "lodash/get.js";
-import _set from "lodash/set.js";
-import _unset from "lodash/unset.js";
-import forOwn from "lodash/forOwn.js";
-import isObject from "lodash/isObject.js";
-import isArray from "lodash/isArray.js";
-import isEmpty from "lodash/isEmpty.js";
+import _get from "es-toolkit/compat/get";
+import _set from "es-toolkit/compat/set";
+import _unset from "es-toolkit/compat/unset";
+import forOwn from "es-toolkit/compat/forOwn";
+import isObject from "es-toolkit/compat/isObject";
+import isEmpty from "es-toolkit/compat/isEmpty";
 
 
 let instance = null;
@@ -80,7 +79,7 @@ export class Settings {
         const flatten = (obj, prefix = '') => {
             forOwn(obj, (value, key) => {
                 const newPath = prefix ? `${prefix}.${key}` : key;
-                if (isObject(value) && !isArray(value) && !isEmpty(value)) {
+                if (isObject(value) && !Array.isArray(value) && !isEmpty(value)) {
                     flatten(value, newPath);
                 } else {
                     result[newPath] = value;
