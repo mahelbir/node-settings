@@ -64,6 +64,6 @@ jobs:
         env:
           GIT_CLIFF__GIT__FILTER_UNCONVENTIONAL: false
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: ${{ steps.cliff.outputs.content }}
