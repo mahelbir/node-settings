@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import {Settings, setDefaultFile, initSettings, settings, destroySettings} from "../src/index.js";
+import {Settings} from "../src/index.js";
 
 let tmpDir;
 
@@ -25,6 +25,26 @@ function fixture(name, data) {
 function suppressConsole(t, method) {
     t.mock.method(console, method, () => {});
 }
+
+describe("constructor", () => {
+    test("throws TypeError when file is omitted", () => {
+        assert.throws(() => new Settings(), {name: "TypeError", message: /non-empty string/});
+    });
+
+    test("throws TypeError for empty, blank or non-string file", () => {
+        assert.throws(() => new Settings(""), TypeError);
+        assert.throws(() => new Settings("   "), TypeError);
+        assert.throws(() => new Settings(123), TypeError);
+        assert.throws(() => new Settings(null), TypeError);
+    });
+
+    test("returns empty object when the file is missing", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "absent.json");
+        const s = new Settings(fp);
+        assert.deepEqual(s.raw(), {});
+    });
+});
 
 describe("Settings instance", () => {
     test("get returns a deep nested value via dot-notation", () => {
@@ -104,175 +124,105 @@ describe("Settings instance", () => {
         assert.deepEqual(flat.x, {});
         assert.equal(flat["y.z"], 5);
     });
+});
 
-    test("constructor returns empty object when file is missing", (t) => {
-        suppressConsole(t, "error");
-        const fp = path.join(tmpDir, "absent.json");
+describe("reload", () => {
+    test("picks up external changes and returns true on success", () => {
+        const fp = fixture("r.json", {key: "v1"});
         const s = new Settings(fp);
-        assert.deepEqual(s.raw(), {});
+        assert.equal(s.get("key"), "v1");
+        fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
+        assert.equal(s.reload(), true);
+        assert.equal(s.get("key"), "v2");
+    });
+
+    test("keeps last good data and returns false when the file becomes unreadable", (t) => {
+        suppressConsole(t, "error");
+        const fp = fixture("r.json", {key: "v1"});
+        const s = new Settings(fp);
+        fs.writeFileSync(fp, "{not valid json");
+        assert.equal(s.reload(), false);
+        assert.equal(s.get("key"), "v1");
     });
 });
 
-describe("Settings.put", () => {
-    test("writes the given key-value pairs to disk", (t) => {
-        suppressConsole(t, "error");
-        const fp = path.join(tmpDir, "put.json");
-        Settings.put({foo: "bar", "nested.key": 42}, fp);
-        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
-        assert.equal(raw.foo, "bar");
-        assert.equal(raw.nested.key, 42);
-    });
-
-    test("ignores inherited (prototype-chain) keys", (t) => {
-        suppressConsole(t, "error");
-        const fp = path.join(tmpDir, "put-proto.json");
-        const params = Object.create({inherited: "nope"});
-        params.own = "yes";
-        Settings.put(params, fp);
-        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
-        assert.equal(raw.own, "yes");
-        assert.equal("inherited" in raw, false);
-    });
-});
-
-describe("singleton mode", () => {
-    test("setDefaultFile + initSettings exposes data via settings()", (t) => {
-        suppressConsole(t, "info");
-        const fp = fixture("def.json", {key: "value"});
-        setDefaultFile(fp);
-        const handle = initSettings(60);
+describe("polling", () => {
+    test("startPolling refreshes from the file on its interval", (t) => {
+        t.mock.timers.enable({apis: ["setInterval"]});
+        const fp = fixture("p.json", {key: "v1"});
+        const s = new Settings(fp);
+        s.startPolling(1);
         try {
-            assert.equal(settings().get("key"), "value");
+            assert.equal(s.get("key"), "v1");
+            fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
+            t.mock.timers.tick(1000);
+            assert.equal(s.get("key"), "v2");
         } finally {
-            clearInterval(handle);
+            s.stopPolling();
         }
     });
 
-    test("setDefaultFile rejects empty or non-string input", () => {
-        assert.throws(() => setDefaultFile(""), TypeError);
-        assert.throws(() => setDefaultFile("   "), TypeError);
-        assert.throws(() => setDefaultFile(null), TypeError);
+    test("stopPolling halts further refreshes", (t) => {
+        t.mock.timers.enable({apis: ["setInterval"]});
+        const fp = fixture("p.json", {key: "v1"});
+        const s = new Settings(fp);
+        s.startPolling(1);
+        s.stopPolling();
+        fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
+        t.mock.timers.tick(1000);
+        assert.equal(s.get("key"), "v1");
     });
 
-    test("setDefaultFile throws a descriptive TypeError for non-string input", () => {
-        assert.throws(() => setDefaultFile(123), {name: "TypeError", message: /non-empty string/});
-        assert.throws(() => setDefaultFile({}), {name: "TypeError", message: /non-empty string/});
-    });
-
-    test("initSettings clears the previous interval when called again", (t) => {
-        suppressConsole(t, "info");
-        const fp = fixture("def.json", {key: "value"});
-        setDefaultFile(fp);
+    test("startPolling clears the previous timer when called again", (t) => {
+        const fp = fixture("p.json", {});
         let nextId = 1;
         t.mock.method(globalThis, "setInterval", () => nextId++);
         const cleared = [];
         t.mock.method(globalThis, "clearInterval", (h) => cleared.push(h));
-        const first = initSettings(60);
+        const s = new Settings(fp);
+        s.startPolling(60);          // setInterval -> 1
+        const first = s._timer;
         cleared.length = 0;
-        initSettings(60);
+        s.startPolling(60);          // must clear the previous timer (1) before setting a new one
         assert.deepEqual(cleared, [first]);
-    });
-
-    test("interval refresh keeps last good data when the file becomes unreadable", (t) => {
-        suppressConsole(t, "info");
-        suppressConsole(t, "error");
-        t.mock.timers.enable({apis: ["setInterval"]});
-        const fp = fixture("def.json", {key: "value"});
-        setDefaultFile(fp);
-        const handle = initSettings(1);
-        try {
-            assert.equal(settings().get("key"), "value");
-            fs.rmSync(fp);
-            t.mock.timers.tick(1000);
-            assert.equal(settings().get("key"), "value");
-        } finally {
-            clearInterval(handle);
-        }
     });
 });
 
-describe("named registry", () => {
-    test("named init exposes each file independently via settings(name)", (t) => {
-        suppressConsole(t, "info");
-        const fa = fixture("a.json", {key: "A"});
-        const fb = fixture("b.json", {key: "B"});
-        initSettings(60, "a", fa);
-        initSettings(60, "b", fb);
-        try {
-            assert.equal(settings("a").get("key"), "A");
-            assert.equal(settings("b").get("key"), "B");
-        } finally {
-            destroySettings("a");
-            destroySettings("b");
-        }
+describe("put", () => {
+    test("merges params into the current on-disk content", () => {
+        const fp = fixture("put.json", {existing: 1});
+        const s = new Settings(fp);
+        s.put({foo: "bar", "nested.key": 42});
+        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
+        assert.equal(raw.existing, 1);
+        assert.equal(raw.foo, "bar");
+        assert.equal(raw.nested.key, 42);
     });
 
-    test("settings() targets the same entry as settings('default')", (t) => {
-        suppressConsole(t, "info");
-        const fp = fixture("def.json", {key: "value"});
-        setDefaultFile(fp);
-        initSettings(60);
-        try {
-            assert.notEqual(settings(), null);
-            assert.equal(settings(), settings("default"));
-            assert.equal(settings("default").get("key"), "value");
-        } finally {
-            destroySettings();
-        }
+    test("reads fresh from disk and ignores in-memory state", () => {
+        const fp = fixture("put.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);              // in-memory only, never saved
+        s.put({c: 3});
+        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
+        assert.deepEqual(raw, {a: 1, c: 3});   // b is absent -> memory ignored
     });
 
-    test("initSettings throws when name is given without a file", () => {
-        assert.throws(() => initSettings(60, "db"), {name: "TypeError", message: /file is required/});
-    });
-
-    test("initSettings throws when name is an empty string", () => {
-        assert.throws(() => initSettings(60, "   "), {name: "TypeError", message: /non-empty string/});
-    });
-
-    test("settings returns null for an unknown name", () => {
-        assert.equal(settings("no-such-entry"), null);
-    });
-
-    test("named entry refreshes from its own file on its interval", (t) => {
-        suppressConsole(t, "info");
+    test("creates the file from scratch when it does not exist", (t) => {
         suppressConsole(t, "error");
-        t.mock.timers.enable({apis: ["setInterval"]});
-        const fp = fixture("r.json", {key: "v1"});
-        initSettings(1, "r", fp);
-        try {
-            assert.equal(settings("r").get("key"), "v1");
-            fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
-            t.mock.timers.tick(1000);
-            assert.equal(settings("r").get("key"), "v2");
-        } finally {
-            destroySettings("r");
-        }
+        const fp = path.join(tmpDir, "put-new.json");
+        new Settings(fp).put({foo: "bar"});
+        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
+        assert.equal(raw.foo, "bar");
     });
 
-    test("destroySettings stops refresh and removes the entry", (t) => {
-        suppressConsole(t, "info");
-        suppressConsole(t, "error");
-        t.mock.timers.enable({apis: ["setInterval"]});
-        const fp = fixture("d.json", {key: "v1"});
-        initSettings(1, "d", fp);
-        assert.equal(settings("d").get("key"), "v1");
-        destroySettings("d");
-        assert.equal(settings("d"), null);
-        fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
-        t.mock.timers.tick(1000);
-        assert.equal(settings("d"), null);
-    });
-
-    test("re-init of a name clears its previous interval", (t) => {
-        suppressConsole(t, "info");
-        const fp = fixture("ri.json", {key: "value"});
-        let nextId = 100;
-        t.mock.method(globalThis, "setInterval", () => nextId++);
-        const cleared = [];
-        t.mock.method(globalThis, "clearInterval", (h) => cleared.push(h));
-        const first = initSettings(60, "ri", fp);
-        cleared.length = 0;
-        initSettings(60, "ri", fp);
-        assert.deepEqual(cleared, [first]);
+    test("ignores inherited (prototype-chain) keys", () => {
+        const fp = fixture("put-proto.json", {});
+        const params = Object.create({inherited: "nope"});
+        params.own = "yes";
+        new Settings(fp).put(params);
+        const raw = JSON.parse(fs.readFileSync(fp, "utf-8"));
+        assert.equal(raw.own, "yes");
+        assert.equal("inherited" in raw, false);
     });
 });

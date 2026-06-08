@@ -8,78 +8,49 @@ import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
 
 
-const DEFAULT_NAME = "default";
-const instances = new Map();
-const timers = new Map();
-let defaultFile = path.resolve("./settings.json");
-
-function load(name, file, guardLoaded) {
-    const next = new Settings(file);
-    if (!guardLoaded || next._loaded) {
-        instances.set(name, next);
-    }
-}
-
-export function setDefaultFile(file) {
-    if (typeof file !== "string" || !file.trim()) {
-        throw new TypeError("File must be a non-empty string path");
-    }
-    defaultFile = path.resolve(file.trim());
-}
-
-export function initSettings(intervalSeconds = 1, name = null, file = null) {
-    let targetName = DEFAULT_NAME;
-    let targetFile = null;
-    if (name != null) {
-        if (typeof name !== "string" || !name.trim()) {
-            throw new TypeError("name must be a non-empty string");
-        }
-        if (typeof file !== "string" || !file.trim()) {
-            throw new TypeError("file is required when name is provided");
-        }
-        targetName = name.trim();
-        targetFile = file.trim();
-    }
-    if (timers.has(targetName)) {
-        clearInterval(timers.get(targetName));
-    }
-    load(targetName, targetFile, false);
-    console.info(`Settings initialized`, targetName, targetFile || defaultFile, `(refresh: ${intervalSeconds}s)`);
-    const timer = setInterval(() => {
-        load(targetName, targetFile, true);
-    }, intervalSeconds * 1000);
-    timers.set(targetName, timer);
-    return timer;
-}
-
-export function destroySettings(name = DEFAULT_NAME) {
-    if (timers.has(name)) {
-        clearInterval(timers.get(name));
-        timers.delete(name);
-    }
-    instances.delete(name);
-}
-
-export function settings(name = DEFAULT_NAME) {
-    return instances.get(name) ?? null;
-}
-
 export class Settings {
 
-    constructor(file = null) {
-        this._file = file || defaultFile;
+    constructor(file) {
+        if (typeof file !== "string" || !file.trim()) {
+            throw new TypeError("File must be a non-empty string path");
+        }
+        this._file = path.resolve(file.trim());
+        this._settings = {};
+        this._timer = null;
+        this.reload();
+    }
+
+    _readFile() {
         try {
-            this._settings = JSON.parse(fs.readFileSync(this._file, {encoding: 'utf-8'}));
-            this._loaded = true;
+            return {ok: true, data: JSON.parse(fs.readFileSync(this._file, {encoding: "utf-8"}))};
         } catch (e) {
             console.error("Settings.parse", e);
-            this._settings = {};
-            this._loaded = false;
+            return {ok: false, data: {}};
         }
     }
 
-    save() {
-        fs.writeFileSync(this._file, JSON.stringify(this._settings));
+    _writeFile(data) {
+        fs.writeFileSync(this._file, JSON.stringify(data));
+    }
+
+    reload() {
+        const {ok, data} = this._readFile();
+        if (ok) {
+            this._settings = data;
+        }
+        return ok;
+    }
+
+    startPolling(intervalSeconds = 1) {
+        this.stopPolling();
+        this._timer = setInterval(() => this.reload(), intervalSeconds * 1000);
+    }
+
+    stopPolling() {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
     }
 
     get(key, defaultValue = undefined) {
@@ -92,6 +63,18 @@ export class Settings {
 
     unset(key) {
         _unset(this._settings, key);
+    }
+
+    put(params) {
+        const {data} = this._readFile();
+        forOwn(params, (value, key) => {
+            _set(data, key, value);
+        });
+        this._writeFile(data);
+    }
+
+    save() {
+        this._writeFile(this._settings);
     }
 
     raw() {
@@ -114,14 +97,4 @@ export class Settings {
         return result;
     }
 
-    static put(params, file = null) {
-        const settings = new Settings(file);
-        forOwn(params, (value, key) => {
-            settings.set(key, value);
-        });
-        settings.save();
-    }
-
 }
-
-export default Settings;
