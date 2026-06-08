@@ -60,6 +60,27 @@ initSettings(3);
 settings().get("feature.enabled");
 ```
 
+### Named Registry (Multiple Files)
+
+Manage several independent config files at once. Pass a `name` and `file` to `initSettings`, then read each by name with
+`settings(name)`. Each entry refreshes on its own interval.
+
+```javascript
+import {initSettings, settings, destroySettings} from "@mahelbir/settings";
+
+initSettings(3, "db", "./db.json");          // when name is given, file is required
+initSettings(5, "features", "./features.json");
+
+settings("db").get("host");
+settings("features").get("beta.enabled");
+
+destroySettings("db");                       // stop one entry's refresh and drop it
+```
+
+The no-name call (`initSettings(3)`) and `settings()` map to a reserved `"default"` entry, so `settings()` equals
+`settings("default")`. Re-initializing a name replaces its timer; `destroySettings(name)` clears it. `settings()`
+returns `null` for an unknown name.
+
 ### Static Write
 
 Write key-value pairs to a config file without creating an instance.
@@ -72,19 +93,20 @@ Settings.put({"app.version": "2.1.0", "app.updatedAt": Date.now()}, "./config.js
 
 ## API
 
-| Method                           | Description                                                 |
-|----------------------------------|-------------------------------------------------------------|
-| `new Settings(file?)`            | Create instance, reads from file (default: `settings.json`) |
-| `get(key, default?)`             | Get value by dot-notation key                               |
-| `set(key, value)`                | Set value by dot-notation key                               |
-| `unset(key)`                     | Remove a key                                                |
-| `save()`                         | Write current state to file                                 |
-| `raw()`                          | Return raw internal settings object (mutable)               |
-| `all()`                          | Return flat key-value map with dot-notation keys            |
-| `Settings.put(params, file?)`    | Static: write key-value pairs to file                       |
-| `initSettings(intervalSeconds?)` | Start auto-refreshing singleton (default: 1s)               |
-| `settings()`                     | Get current singleton instance                              |
-| `setDefaultFile(file)`           | Change default file path                                    |
+| Method                                         | Description                                                                                                   |
+|------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| `new Settings(file?)`                          | Create instance, reads from file (default: `settings.json`)                                                   |
+| `get(key, default?)`                           | Get value by dot-notation key                                                                                 |
+| `set(key, value)`                              | Set value by dot-notation key                                                                                 |
+| `unset(key)`                                   | Remove a key                                                                                                  |
+| `save()`                                       | Write current state to file                                                                                   |
+| `raw()`                                        | Return raw internal settings object (mutable)                                                                 |
+| `all()`                                        | Return flat key-value map with dot-notation keys                                                              |
+| `Settings.put(params, file?)`                  | Static: write key-value pairs to file                                                                         |
+| `initSettings(intervalSeconds?, name?, file?)` | Start an auto-refreshing entry; with `name`, `file` is required, else uses `"default"` (interval default: 1s) |
+| `settings(name?)`                              | Get an entry by name (default: `"default"`); `null` if absent                                                 |
+| `destroySettings(name?)`                       | Stop an entry's refresh and remove it (default: `"default"`)                                                  |
+| `setDefaultFile(file)`                         | Change default file path                                                                                      |
 
 ## License
 

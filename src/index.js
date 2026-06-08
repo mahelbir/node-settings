@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-
 import _get from "es-toolkit/compat/get";
 import _set from "es-toolkit/compat/set";
 import _unset from "es-toolkit/compat/unset";
@@ -9,35 +8,60 @@ import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
 
 
-let instance = null;
-let refreshTimer = null;
+const DEFAULT_NAME = "default";
+const instances = new Map();
+const timers = new Map();
 let defaultFile = path.resolve("./settings.json");
 
+function load(name, file, guardLoaded) {
+    const next = new Settings(file);
+    if (!guardLoaded || next._loaded) {
+        instances.set(name, next);
+    }
+}
 
 export function setDefaultFile(file) {
     if (typeof file !== "string" || !file.trim()) {
-        throw new TypeError("Settings.setDefaultFile: file must be a non-empty string path");
+        throw new TypeError("File must be a non-empty string path");
     }
     defaultFile = path.resolve(file.trim());
 }
 
-export function initSettings(intervalSeconds = 1) {
-    if (refreshTimer) {
-        clearInterval(refreshTimer);
-    }
-    instance = new Settings();
-    console.info(`Settings initialized`, defaultFile, `(refresh: ${intervalSeconds}s)`);
-    refreshTimer = setInterval(() => {
-        const next = new Settings();
-        if (next._loaded) {
-            instance = next;
+export function initSettings(intervalSeconds = 1, name = null, file = null) {
+    let targetName = DEFAULT_NAME;
+    let targetFile = null;
+    if (name != null) {
+        if (typeof name !== "string" || !name.trim()) {
+            throw new TypeError("name must be a non-empty string");
         }
+        if (typeof file !== "string" || !file.trim()) {
+            throw new TypeError("file is required when name is provided");
+        }
+        targetName = name.trim();
+        targetFile = file.trim();
+    }
+    if (timers.has(targetName)) {
+        clearInterval(timers.get(targetName));
+    }
+    load(targetName, targetFile, false);
+    console.info(`Settings initialized`, targetName, targetFile || defaultFile, `(refresh: ${intervalSeconds}s)`);
+    const timer = setInterval(() => {
+        load(targetName, targetFile, true);
     }, intervalSeconds * 1000);
-    return refreshTimer;
+    timers.set(targetName, timer);
+    return timer;
 }
 
-export function settings() {
-    return instance;
+export function destroySettings(name = DEFAULT_NAME) {
+    if (timers.has(name)) {
+        clearInterval(timers.get(name));
+        timers.delete(name);
+    }
+    instances.delete(name);
+}
+
+export function settings(name = DEFAULT_NAME) {
+    return instances.get(name) ?? null;
 }
 
 export class Settings {

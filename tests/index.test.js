@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import {Settings, setDefaultFile, initSettings, settings} from "../src/index.js";
+import {Settings, setDefaultFile, initSettings, settings, destroySettings} from "../src/index.js";
 
 let tmpDir;
 
@@ -188,5 +188,91 @@ describe("singleton mode", () => {
         } finally {
             clearInterval(handle);
         }
+    });
+});
+
+describe("named registry", () => {
+    test("named init exposes each file independently via settings(name)", (t) => {
+        suppressConsole(t, "info");
+        const fa = fixture("a.json", {key: "A"});
+        const fb = fixture("b.json", {key: "B"});
+        initSettings(60, "a", fa);
+        initSettings(60, "b", fb);
+        try {
+            assert.equal(settings("a").get("key"), "A");
+            assert.equal(settings("b").get("key"), "B");
+        } finally {
+            destroySettings("a");
+            destroySettings("b");
+        }
+    });
+
+    test("settings() targets the same entry as settings('default')", (t) => {
+        suppressConsole(t, "info");
+        const fp = fixture("def.json", {key: "value"});
+        setDefaultFile(fp);
+        initSettings(60);
+        try {
+            assert.notEqual(settings(), null);
+            assert.equal(settings(), settings("default"));
+            assert.equal(settings("default").get("key"), "value");
+        } finally {
+            destroySettings();
+        }
+    });
+
+    test("initSettings throws when name is given without a file", () => {
+        assert.throws(() => initSettings(60, "db"), {name: "TypeError", message: /file is required/});
+    });
+
+    test("initSettings throws when name is an empty string", () => {
+        assert.throws(() => initSettings(60, "   "), {name: "TypeError", message: /non-empty string/});
+    });
+
+    test("settings returns null for an unknown name", () => {
+        assert.equal(settings("no-such-entry"), null);
+    });
+
+    test("named entry refreshes from its own file on its interval", (t) => {
+        suppressConsole(t, "info");
+        suppressConsole(t, "error");
+        t.mock.timers.enable({apis: ["setInterval"]});
+        const fp = fixture("r.json", {key: "v1"});
+        initSettings(1, "r", fp);
+        try {
+            assert.equal(settings("r").get("key"), "v1");
+            fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
+            t.mock.timers.tick(1000);
+            assert.equal(settings("r").get("key"), "v2");
+        } finally {
+            destroySettings("r");
+        }
+    });
+
+    test("destroySettings stops refresh and removes the entry", (t) => {
+        suppressConsole(t, "info");
+        suppressConsole(t, "error");
+        t.mock.timers.enable({apis: ["setInterval"]});
+        const fp = fixture("d.json", {key: "v1"});
+        initSettings(1, "d", fp);
+        assert.equal(settings("d").get("key"), "v1");
+        destroySettings("d");
+        assert.equal(settings("d"), null);
+        fs.writeFileSync(fp, JSON.stringify({key: "v2"}));
+        t.mock.timers.tick(1000);
+        assert.equal(settings("d"), null);
+    });
+
+    test("re-init of a name clears its previous interval", (t) => {
+        suppressConsole(t, "info");
+        const fp = fixture("ri.json", {key: "value"});
+        let nextId = 100;
+        t.mock.method(globalThis, "setInterval", () => nextId++);
+        const cleared = [];
+        t.mock.method(globalThis, "clearInterval", (h) => cleared.push(h));
+        const first = initSettings(60, "ri", fp);
+        cleared.length = 0;
+        initSettings(60, "ri", fp);
+        assert.deepEqual(cleared, [first]);
     });
 });
