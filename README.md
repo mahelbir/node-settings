@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@mahelbir/settings.svg)](https://www.npmjs.com/package/@mahelbir/settings)
 
-Lightweight JSON configuration file loader for Node.js (ESM & CommonJS) with deep get/set support and auto-refresh
+Lightweight JSON configuration file loader with deep get/set support and auto-refresh
 capability.
 
 ## Installation
@@ -122,6 +122,11 @@ new Settings("./config.json").put({"app.version": "2.1.0", "app.updatedAt": Date
 | `stopPolling()`                  | Stop auto-refreshing                                                          |
 | `raw()`                          | Return raw internal settings object (mutable reference)                       |
 | `all()`                          | Return flat key-value map with dot-notation keys                              |
+
+## Support
+
+If this project helps you, please consider giving it a [Star ⭐️](https://github.com/mahelbir/node-settings) on GitHub.
+This will encourage us to continue developing and maintaining this project.
 
 ## License
 

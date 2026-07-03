@@ -30,7 +30,7 @@ export class Settings {
     }
 
     _writeFile(data) {
-        fs.writeFileSync(this._file, JSON.stringify(data));
+        fs.writeFileSync(this._file, JSON.stringify(data, null, 2));
     }
 
     reload() {
