@@ -79,13 +79,13 @@ describe("Settings instance", () => {
         assert.equal(s.get("removeme"), undefined);
     });
 
-    test("save persists current state as minified JSON", () => {
+    test("save persists current state as indented JSON", () => {
         const fp = fixture("s.json", {});
         const s = new Settings(fp);
         s.set("persist", "yes");
         s.save();
         const raw = fs.readFileSync(fp, "utf-8");
-        assert.equal(raw, '{"persist":"yes"}');
+        assert.equal(raw, '{\n  "persist": "yes"\n}');
     });
 
     test("raw returns the underlying object by reference", () => {
