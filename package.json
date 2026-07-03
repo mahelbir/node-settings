@@ -2,7 +2,7 @@
   "name": "@mahelbir/settings",
   "version": "4.0.0",
   "private": false,
-  "description": "Lightweight JSON configuration file loader for Node.js with deep get/set support and auto-refresh capability",
+  "description": "Lightweight JSON configuration file loader with deep get/set support and auto-refresh capability.",
   "keywords": [
     "json config",
     "settings",
@@ -31,10 +31,10 @@
     "relock": "rm -rf node_modules package-lock.json && NODE_ENV= npm install --include=dev --include=optional"
   },
   "dependencies": {
-    "es-toolkit": "^1.47.0"
+    "es-toolkit": "^1.49.0"
   },
   "devDependencies": {
-    "tsdown": "^0.22.2"
+    "tsdown": "^0.22.3"
   },
   "engines": {
     "node": ">=18.0.0"
