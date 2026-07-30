@@ -226,3 +226,95 @@ describe("put", () => {
         assert.equal("inherited" in raw, false);
     });
 });
+
+describe("reload parse-skip", () => {
+    test("does not parse again when the file is unchanged", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const spy = t.mock.method(JSON, "parse");
+        assert.equal(s.reload(), true);
+        assert.equal(spy.mock.callCount(), 0);
+        assert.equal(s.get("a"), 1);
+    });
+
+    test("parses and picks up new data when the file changes", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        fs.writeFileSync(fp, JSON.stringify({a: 2}));
+        const spy = t.mock.method(JSON, "parse");
+        assert.equal(s.reload(), true);
+        assert.equal(spy.mock.callCount(), 1);
+        assert.equal(s.get("a"), 2);
+    });
+
+    test("keeps last good data and returns false on invalid JSON", (t) => {
+        suppressConsole(t, "error");
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        fs.writeFileSync(fp, "{ broken");
+        assert.equal(s.reload(), false);
+        assert.equal(s.get("a"), 1);
+    });
+
+    test("parses again on every reload while the file stays invalid", (t) => {
+        suppressConsole(t, "error");
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        fs.writeFileSync(fp, "{ broken");
+        assert.equal(s.reload(), false);
+        const spy = t.mock.method(JSON, "parse");
+        assert.equal(s.reload(), false);
+        assert.equal(spy.mock.callCount(), 1);
+    });
+
+    test("keeps last good data and returns false when the file disappears", (t) => {
+        suppressConsole(t, "error");
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        fs.rmSync(fp);
+        assert.equal(s.reload(), false);
+        assert.equal(s.get("a"), 1);
+    });
+});
+
+describe("write checksum", () => {
+    test("reload after save does not parse", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        const spy = t.mock.method(JSON, "parse");
+        assert.equal(s.reload(), true);
+        assert.equal(spy.mock.callCount(), 0);
+        assert.equal(s.get("b"), 2);
+    });
+
+    test("reload after put parses and picks up the written data", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.put({b: 2});
+        assert.equal(s.get("b"), undefined);
+        const spy = t.mock.method(JSON, "parse");
+        assert.equal(s.reload(), true);
+        assert.equal(spy.mock.callCount(), 1);
+        assert.equal(s.get("b"), 2);
+    });
+
+    test("put does not mutate in-memory settings", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const before = s.raw();
+        s.put({b: 2});
+        assert.equal(s.raw(), before);
+        assert.deepEqual(s.raw(), {a: 1});
+    });
+
+    test("save keeps the file readable by a fresh instance", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        const fresh = new Settings(fp);
+        assert.deepEqual(fresh.raw(), {a: 1, b: 2});
+    });
+});

@@ -6,6 +6,7 @@ import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
+import {checksum} from "./helper.js";
 
 
 export class Settings {
@@ -16,13 +17,24 @@ export class Settings {
         }
         this._file = path.resolve(file.trim());
         this._settings = {};
+        this._loadedFileChecksum = null;
         this._timer = null;
         this.reload();
     }
 
     _readFile() {
         try {
-            return {ok: true, data: JSON.parse(fs.readFileSync(this._file, {encoding: "utf-8"}))};
+            const buffer = fs.readFileSync(this._file);
+            return {ok: true, buffer, fileChecksum: checksum(buffer)};
+        } catch (e) {
+            console.error("Settings.read", e);
+            return {ok: false, buffer: null, fileChecksum: null};
+        }
+    }
+
+    _parseBuffer(buffer) {
+        try {
+            return {ok: true, data: JSON.parse(buffer.toString("utf-8"))};
         } catch (e) {
             console.error("Settings.parse", e);
             return {ok: false, data: {}};
@@ -30,15 +42,26 @@ export class Settings {
     }
 
     _writeFile(data) {
-        fs.writeFileSync(this._file, JSON.stringify(data, null, 2));
+        const json = JSON.stringify(data, null, 2);
+        fs.writeFileSync(this._file, json);
+        return checksum(json);
     }
 
     reload() {
-        const {ok, data} = this._readFile();
-        if (ok) {
-            this._settings = data;
+        const {ok, buffer, fileChecksum} = this._readFile();
+        if (!ok) {
+            return false;
         }
-        return ok;
+        if (fileChecksum === this._loadedFileChecksum) {
+            return true;
+        }
+        const parsed = this._parseBuffer(buffer);
+        if (!parsed.ok) {
+            return false;
+        }
+        this._settings = parsed.data;
+        this._loadedFileChecksum = fileChecksum;
+        return true;
     }
 
     startPolling(intervalSeconds = 1) {
@@ -66,7 +89,8 @@ export class Settings {
     }
 
     put(params) {
-        const {data} = this._readFile();
+        const {ok, buffer} = this._readFile();
+        const data = ok ? this._parseBuffer(buffer).data : {};
         forOwn(params, (value, key) => {
             _set(data, key, value);
         });
@@ -74,7 +98,7 @@ export class Settings {
     }
 
     save() {
-        this._writeFile(this._settings);
+        this._loadedFileChecksum = this._writeFile(this._settings);
     }
 
     raw() {
