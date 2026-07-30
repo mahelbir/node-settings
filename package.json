@@ -1,6 +1,6 @@
 {
   "name": "@mahelbir/settings",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": false,
   "description": "Lightweight JSON configuration file loader with deep get/set support and auto-refresh capability.",
   "keywords": [
