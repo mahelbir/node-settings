@@ -6,7 +6,7 @@ import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
-import {checksum, sortDeep} from "./helper.js";
+import {checksum, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
 
 
 export class Settings {
@@ -43,7 +43,7 @@ export class Settings {
 
     _writeFile(data) {
         const json = JSON.stringify(data, null, 2);
-        fs.writeFileSync(this._file, json);
+        writeFileAtomic(this._file, json);
         return checksum(json);
     }
 
@@ -89,16 +89,20 @@ export class Settings {
     }
 
     put(params) {
-        const {ok, buffer} = this._readFile();
-        const data = ok ? this._parseBuffer(buffer).data : {};
-        forOwn(params, (value, key) => {
-            _set(data, key, value);
+        withFileLock(this._file, () => {
+            const {ok, buffer} = this._readFile();
+            const data = ok ? this._parseBuffer(buffer).data : {};
+            forOwn(params, (value, key) => {
+                _set(data, key, value);
+            });
+            this._writeFile(data);
         });
-        this._writeFile(data);
     }
 
     save() {
-        this._loadedFileChecksum = this._writeFile(this._settings);
+        withFileLock(this._file, () => {
+            this._loadedFileChecksum = this._writeFile(this._settings);
+        });
     }
 
     version() {

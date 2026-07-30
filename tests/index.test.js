@@ -454,3 +454,117 @@ describe("version", () => {
         assert.notEqual(new Settings(a).version(), new Settings(fixture("c.json", {})).version());
     });
 });
+
+describe("atomic write", () => {
+    test("save replaces the file by rename instead of truncating in place", () => {
+        const fp = fixture("s.json", {a: 1});
+        const before = fs.statSync(fp).ino;
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        assert.notEqual(fs.statSync(fp).ino, before);
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1, b: 2});
+    });
+
+    test("put replaces the file by rename instead of truncating in place", () => {
+        const fp = fixture("s.json", {a: 1});
+        const before = fs.statSync(fp).ino;
+        new Settings(fp).put({b: 2});
+        assert.notEqual(fs.statSync(fp).ino, before);
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1, b: 2});
+    });
+
+    test("preserves the file permission mode on save", () => {
+        const fp = fixture("s.json", {a: 1});
+        fs.chmodSync(fp, 0o600);
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        assert.equal(fs.statSync(fp).mode & 0o777, 0o600);
+    });
+
+    test("preserves the file permission mode on put", () => {
+        const fp = fixture("s.json", {a: 1});
+        fs.chmodSync(fp, 0o600);
+        new Settings(fp).put({b: 2});
+        assert.equal(fs.statSync(fp).mode & 0o777, 0o600);
+    });
+
+    test("writes through a symlink instead of replacing it", () => {
+        const real = fixture("real.json", {a: 1});
+        const link = path.join(tmpDir, "link.json");
+        fs.symlinkSync(real, link);
+        const s = new Settings(link);
+        s.set("b", 2);
+        s.save();
+        assert.equal(fs.lstatSync(link).isSymbolicLink(), true);
+        assert.deepEqual(JSON.parse(fs.readFileSync(real, "utf-8")), {a: 1, b: 2});
+    });
+
+    test("leaves no temporary file behind", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        s.put({c: 3});
+        assert.deepEqual(fs.readdirSync(tmpDir).filter((f) => f.endsWith(".tmp")), []);
+    });
+
+    test("removes the temporary file and rethrows when rename fails", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        t.mock.method(fs, "renameSync", () => {
+            throw Object.assign(new Error("boom"), {code: "ENOSPC"});
+        });
+        assert.throws(() => s.save(), /boom/);
+        assert.deepEqual(fs.readdirSync(tmpDir).filter((f) => f.endsWith(".tmp")), []);
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1});
+    });
+
+    test("leaves no lock directory behind after save and put", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        s.put({c: 3});
+        assert.deepEqual(fs.readdirSync(tmpDir).filter((f) => f.endsWith(".lock")), []);
+    });
+
+    test("locks and creates the file even when it does not exist yet", () => {
+        const fp = path.join(tmpDir, "fresh.json");
+        new Settings(fp).put({a: 1});
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1});
+        assert.deepEqual(fs.readdirSync(tmpDir).filter((f) => f.endsWith(".lock")), []);
+    });
+
+    test("releases the lock when the write throws", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const mock = t.mock.method(fs, "renameSync", () => {
+            throw Object.assign(new Error("boom"), {code: "ENOSPC"});
+        });
+        assert.throws(() => s.save(), /boom/);
+        assert.deepEqual(fs.readdirSync(tmpDir).filter((f) => f.endsWith(".lock")), []);
+        mock.mock.restore();
+        s.save();
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1});
+    });
+
+    test("retries a rename that fails with EBUSY and eventually succeeds", (t) => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        const original = fs.renameSync;
+        let attempts = 0;
+        t.mock.method(fs, "renameSync", (from, to) => {
+            attempts++;
+            if (attempts < 3) {
+                throw Object.assign(new Error("locked"), {code: "EBUSY"});
+            }
+            return original(from, to);
+        });
+        s.save();
+        assert.equal(attempts, 3);
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1, b: 2});
+    });
+});
