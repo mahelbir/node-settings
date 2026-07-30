@@ -6,7 +6,7 @@ import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
-import {checksum} from "./helper.js";
+import {checksum, sortDeep} from "./helper.js";
 
 
 export class Settings {
@@ -99,6 +99,10 @@ export class Settings {
 
     save() {
         this._loadedFileChecksum = this._writeFile(this._settings);
+    }
+
+    version() {
+        return checksum(JSON.stringify(sortDeep(JSON.parse(JSON.stringify(this._settings)))));
     }
 
     raw() {

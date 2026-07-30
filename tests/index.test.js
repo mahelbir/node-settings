@@ -318,3 +318,139 @@ describe("write checksum", () => {
         assert.deepEqual(fresh.raw(), {a: 1, b: 2});
     });
 });
+
+describe("version", () => {
+    test("returns a sha1 hex string even when the file is missing", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "absent.json");
+        const s = new Settings(fp);
+        assert.match(s.version(), /^[0-9a-f]{40}$/);
+    });
+
+    test("two instances holding the same data report the same version", () => {
+        const a = new Settings(fixture("a.json", {x: 1, y: 2}));
+        const b = new Settings(fixture("b.json", {x: 1, y: 2}));
+        assert.equal(a.version(), b.version());
+    });
+
+    test("is independent of key insertion order", () => {
+        const a = new Settings(fixture("a.json", {}));
+        const b = new Settings(fixture("b.json", {}));
+        a.set("x", 1);
+        a.set("y", 2);
+        b.set("y", 2);
+        b.set("x", 1);
+        assert.equal(a.version(), b.version());
+    });
+
+    test("is independent of key order inside nested objects", () => {
+        const a = new Settings(fixture("a.json", {n: {x: 1, y: 2}}));
+        const b = new Settings(fixture("b.json", {n: {y: 2, x: 1}}));
+        assert.equal(a.version(), b.version());
+    });
+
+    test("distinguishes swapped values", () => {
+        const a = new Settings(fixture("a.json", {min: 1, max: 9}));
+        const b = new Settings(fixture("b.json", {min: 9, max: 1}));
+        assert.notEqual(a.version(), b.version());
+    });
+
+    test("preserves array order", () => {
+        const a = new Settings(fixture("a.json", {list: [1, 2, 3]}));
+        const b = new Settings(fixture("b.json", {list: [3, 2, 1]}));
+        assert.notEqual(a.version(), b.version());
+    });
+
+    test("changes after set and returns to the original after unset", () => {
+        const s = new Settings(fixture("s.json", {a: 1}));
+        const initial = s.version();
+        s.set("b", 2);
+        assert.notEqual(s.version(), initial);
+        s.unset("b");
+        assert.equal(s.version(), initial);
+    });
+
+    test("does not change after save", () => {
+        const s = new Settings(fixture("s.json", {a: 1}));
+        const before = s.version();
+        s.save();
+        assert.equal(s.version(), before);
+    });
+
+    test("does not change after put, changes after the following reload", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const before = s.version();
+        s.put({b: 2});
+        assert.equal(s.version(), before);
+        assert.equal(s.reload(), true);
+        assert.notEqual(s.version(), before);
+    });
+
+    test("changes after an external edit is reloaded", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const before = s.version();
+        fs.writeFileSync(fp, JSON.stringify({a: 2}));
+        assert.equal(s.reload(), true);
+        assert.notEqual(s.version(), before);
+    });
+
+    test("does not change when only key order in the file changes", () => {
+        const fp = fixture("s.json", {x: 1, y: 2});
+        const s = new Settings(fp);
+        const before = s.version();
+        fs.writeFileSync(fp, JSON.stringify({y: 2, x: 1}));
+        assert.equal(s.reload(), true);
+        assert.equal(s.version(), before);
+    });
+
+    test("sees non-JSON-native values exactly as save writes them", () => {
+        const s = new Settings(fixture("s.json", {}));
+        s.set("d", new Date(0));
+        const withDate = s.version();
+        s.set("d", "1970-01-01T00:00:00.000Z");
+        assert.equal(s.version(), withDate);
+    });
+
+    test("drops keys whose value is undefined, matching save", () => {
+        const a = new Settings(fixture("a.json", {}));
+        const b = new Settings(fixture("b.json", {}));
+        a.set("k", 1);
+        a.set("gone", undefined);
+        b.set("k", 1);
+        assert.equal(a.version(), b.version());
+    });
+
+    test("throws TypeError on circular data, like save does", () => {
+        const s = new Settings(fixture("s.json", {a: 1}));
+        const cycle = {};
+        cycle.self = cycle;
+        s.set("cycle", cycle);
+        assert.throws(() => s.version(), TypeError);
+    });
+
+    test("reflects direct mutations made through raw()", () => {
+        const s = new Settings(fixture("s.json", {a: 1}));
+        const before = s.version();
+        s.raw().a = 2;
+        assert.notEqual(s.version(), before);
+    });
+
+    test("does not swallow a literal __proto__ key", () => {
+        const withProto = path.join(tmpDir, "proto.json");
+        fs.writeFileSync(withProto, '{"__proto__":{"a":1},"z":2}');
+        const without = path.join(tmpDir, "plain.json");
+        fs.writeFileSync(without, '{"z":2}');
+        assert.notEqual(new Settings(withProto).version(), new Settings(without).version());
+    });
+
+    test("treats constructor and toString as ordinary keys", () => {
+        const a = path.join(tmpDir, "a.json");
+        fs.writeFileSync(a, '{"constructor":{"x":1},"toString":"hi"}');
+        const b = path.join(tmpDir, "b.json");
+        fs.writeFileSync(b, '{"toString":"hi","constructor":{"x":1}}');
+        assert.equal(new Settings(a).version(), new Settings(b).version());
+        assert.notEqual(new Settings(a).version(), new Settings(fixture("c.json", {})).version());
+    });
+});
