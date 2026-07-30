@@ -122,6 +122,8 @@ new Settings("./config.json").put({"app.version": "2.1.0", "app.updatedAt": Date
 | `stopPolling()`                  | Stop auto-refreshing                                                          |
 | `raw()`                          | Return raw internal settings object (mutable reference)                       |
 | `all()`                          | Return flat key-value map with dot-notation keys                              |
+| `version()`                      | SHA-1 checksum of the current in-memory data                                  |
+| `fileChecksum()`                 | SHA-1 of the file's bytes on disk right now; `null` if unreadable             |
 
 ## Support
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 
 import {Settings} from "../src/index.js";
 
@@ -452,6 +453,76 @@ describe("version", () => {
         fs.writeFileSync(b, '{"toString":"hi","constructor":{"x":1}}');
         assert.equal(new Settings(a).version(), new Settings(b).version());
         assert.notEqual(new Settings(a).version(), new Settings(fixture("c.json", {})).version());
+    });
+});
+
+describe("fileChecksum", () => {
+    test("returns the sha1 of the file's current bytes", () => {
+        const fp = fixture("s.json", {a: 1});
+        const expected = crypto.createHash("sha1").update(fs.readFileSync(fp)).digest("hex");
+        assert.equal(new Settings(fp).fileChecksum(), expected);
+    });
+
+    test("returns null when the file is missing", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "absent.json");
+        assert.equal(new Settings(fp).fileChecksum(), null);
+    });
+
+    test("reflects an external edit immediately, without reload", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const before = s.fileChecksum();
+        fs.writeFileSync(fp, JSON.stringify({a: 2}));
+        assert.notEqual(s.fileChecksum(), before);
+        assert.equal(s.get("a"), 1);
+    });
+
+    test("changes on a reformat that leaves version untouched", () => {
+        const fp = fixture("s.json", {x: 1, y: 2});
+        const s = new Settings(fp);
+        const fileBefore = s.fileChecksum();
+        const dataBefore = s.version();
+        fs.writeFileSync(fp, JSON.stringify({y: 2, x: 1}, null, 4));
+        assert.equal(s.reload(), true);
+        assert.notEqual(s.fileChecksum(), fileBefore);
+        assert.equal(s.version(), dataBefore);
+    });
+
+    test("differs from version once the file carries save's indentation", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        s.save();
+        assert.notEqual(s.fileChecksum(), s.version());
+    });
+
+    test("coincides with version when the file already is the canonical form", () => {
+        const fp = path.join(tmpDir, "canonical.json");
+        fs.writeFileSync(fp, '{"a":1,"b":2}');
+        const s = new Settings(fp);
+        assert.equal(s.fileChecksum(), s.version());
+    });
+
+    test("does not change after set, unlike version", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const fileBefore = s.fileChecksum();
+        const dataBefore = s.version();
+        s.set("b", 2);
+        assert.equal(s.fileChecksum(), fileBefore);
+        assert.notEqual(s.version(), dataBefore);
+    });
+
+    test("tracks the file after save and after put", () => {
+        const fp = fixture("s.json", {a: 1});
+        const s = new Settings(fp);
+        const initial = s.fileChecksum();
+        s.set("b", 2);
+        s.save();
+        const afterSave = s.fileChecksum();
+        assert.notEqual(afterSave, initial);
+        s.put({c: 3});
+        assert.notEqual(s.fileChecksum(), afterSave);
     });
 });
 

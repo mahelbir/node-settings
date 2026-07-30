@@ -109,6 +109,10 @@ export class Settings {
         return checksum(JSON.stringify(sortDeep(JSON.parse(JSON.stringify(this._settings)))));
     }
 
+    fileChecksum() {
+        return this._readFile().fileChecksum;
+    }
+
     raw() {
         return this._settings;
     }
