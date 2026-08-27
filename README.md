@@ -1,6 +1,7 @@
 # node-settings
 
 [![npm version](https://img.shields.io/npm/v/@mahelbir/settings.svg)](https://www.npmjs.com/package/@mahelbir/settings)
+[![license](https://img.shields.io/npm/l/@mahelbir/settings.svg)](LICENSE)
 
 Lightweight JSON configuration file loader with deep get/set support and auto-refresh
 capability.
@@ -19,19 +20,6 @@ import {Settings} from "@mahelbir/settings";           // ESM
 const {Settings} = require("@mahelbir/settings");  // CommonJS
 ```
 
-## Quick Start
-
-```javascript
-import {Settings} from "@mahelbir/settings";
-
-const config = new Settings("./config.json");
-
-// Deep get & set with dot notation
-config.get("database.host");             // "localhost"
-config.set("database.port", 5432);
-config.save();                           // Persist changes to file
-```
-
 ## Usage
 
 ### Instance Mode
@@ -45,13 +33,13 @@ const config = new Settings("./config.json");
 
 config.get("app.name");                  // Deep get
 config.get("app.debug", false);          // With default value
-config.set("app.version", "2.0.0");      // Deep set (in-memory)
-config.unset("app.deprecated");          // Remove a key (in-memory)
-config.all();                            // Flat key-value map of all settings
-config.raw();                            // Raw settings object reference
+config.set("app.version", "2.0.0");      // Replace the value at a key
+config.delete("app.deprecated");         // Remove a key
 config.save();                           // Write in-memory state to file
-config.reload();                         // Re-read the file now
 ```
+
+Reads and writes hit the in-memory copy; `save()` is what reaches the file. The full method list is
+in the [API](#api) table.
 
 ### Auto-Refresh (Polling)
 
@@ -88,36 +76,50 @@ config.get("feature.enabled");
 
 > The polling timer keeps the process alive. Call `stopPolling()` to let the process exit.
 
-### Write-Through (`put`)
+### Write-Through (`put` / `patch`)
 
-Merge key-value pairs into the file. `put` reads the **current** on-disk content fresh (ignoring the
-instance's in-memory state) and merges `params` into it. A missing or unreadable/corrupt file is
-treated as an empty object and overwritten — the same overwrite behavior as `save`.
+`put` and `patch` skip the in-memory copy: they read the **current** on-disk content fresh, apply
+`params`, and write atomically under a cross-process lock — so two processes writing different keys
+don't overwrite each other. A missing or corrupt file is treated as an empty object. What they write
+surfaces in memory on the next `reload()` or poll tick.
+
+## Replace vs merge
 
 ```javascript
-import {Settings} from "@mahelbir/settings";
-
-new Settings("./config.json").put({"app.version": "2.1.0", "app.updatedAt": Date.now()});
+// config.json = {"app": {"name": "demo", "version": "1.0"}}
+config.put({app: {version: "2.0"}});     // {"app": {"version": "2.0"}}
+config.patch({app: {version: "2.0"}});   // {"app": {"name": "demo", "version": "2.0"}}
 ```
 
-## `save()` vs `put()`
+| Method                     | Target       | Object value at an existing key |
+|----------------------------|--------------|---------------------------------|
+| `set("job", {count: 9})`   | in-memory    | **replaces** the subtree        |
+| `merge("job", {count: 9})` | in-memory    | **merges** into the subtree     |
+| `put({job: {count: 9}})`   | file (fresh) | **replaces** the subtree        |
+| `patch({job: {count: 9}})` | file (fresh) | **merges** into the subtree     |
 
-- `save()` writes the **entire in-memory** working copy (after `set`/`unset`) to the file.
-- `put(params)` reads the **current file** fresh, merges only `params`, and writes — without touching
-  or reading the in-memory state. Written values
-  surface in memory on the next `reload()` or poll tick.
+`merge` and `patch` deep-merge plain objects and replace everything else — arrays, `null`, primitives
+and class instances. Keys can be dot paths; at a leaf there is nothing to merge, so each pair agrees
+there and they differ only on plain object values.
 
 ## API
+
+All methods below the constructor work on the in-memory copy, except `put` and `patch`, which go
+straight to the file.
 
 | Method                           | Description                                                                   |
 |----------------------------------|-------------------------------------------------------------------------------|
 | `new Settings(file)`             | Create instance and read from `file` (**required**)                           |
 | `get(key, default?)`             | Get value by dot-notation key                                                 |
-| `set(key, value)`                | Set value by dot-notation key (in-memory)                                     |
-| `unset(key)`                     | Remove a key (in-memory)                                                      |
+| `has(key)`                       | Whether the key exists; a stored `undefined` counts as present                |
+| `set(key, value)`                | Replace the value at a key                                                    |
+| `merge(key, value)`              | Deep-merge into the value at a key                                            |
+| `delete(key)`                    | Remove a key                                                                  |
+| `clear()`                        | Empty all settings                                                            |
 | `save()`                         | Write current in-memory state to file                                         |
 | `reload()`                       | Re-read the file now; `true` on success, `false` on failure (keeps last good) |
-| `put(params)`                    | Merge `params` into the current on-disk file (fresh read, ignores memory)     |
+| `put(params)`                    | Replace the value at each key, straight in the file (fresh read, atomic)      |
+| `patch(params)`                  | Deep-merge into the value at each key, straight in the file (fresh read, atomic) |
 | `startPolling(intervalSeconds?)` | Start auto-refreshing the instance on an interval (default: 1s)               |
 | `stopPolling()`                  | Stop auto-refreshing                                                          |
 | `raw()`                          | Return raw internal settings object (mutable reference)                       |
@@ -125,11 +127,11 @@ new Settings("./config.json").put({"app.version": "2.1.0", "app.updatedAt": Date
 | `version()`                      | SHA-1 checksum of the current in-memory data                                  |
 | `fileChecksum()`                 | SHA-1 of the file's bytes on disk right now; `null` if unreadable             |
 
+## Upgrading
+
+Coming from v4? See [migration guide](MIGRATION.md).
+
 ## Support
 
 If this project helps you, please consider giving it a [Star ⭐️](https://github.com/mahelbir/node-settings) on GitHub.
 This will encourage us to continue developing and maintaining this project.
-
-## License
-
-The MIT License (MIT). Please see [License File](LICENSE) for more information.
