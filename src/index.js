@@ -105,15 +105,23 @@ export class Settings {
         this._settings = {};
     }
 
-    put(params) {
+    _writeThrough(apply) {
         withFileLock(this._file, () => {
             const {ok, buffer} = this._readFile();
             const data = ok ? this._parseBuffer(buffer).data : {};
-            forOwn(params, (value, key) => {
-                _set(data, key, value);
-            });
+            apply(data);
             this._writeFile(data);
         });
+    }
+
+    put(params) {
+        this._writeThrough((data) => forOwn(params, (value, key) => {
+            _set(data, key, value);
+        }));
+    }
+
+    patch(params) {
+        this._writeThrough((data) => forOwn(params, (value, key) => this._mergeInto(data, key, value)));
     }
 
     save() {

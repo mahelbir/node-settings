@@ -342,6 +342,103 @@ describe("put", () => {
     });
 });
 
+describe("patch", () => {
+    function read(fp) {
+        return JSON.parse(fs.readFileSync(fp, "utf-8"));
+    }
+
+    test("merges a plain object value instead of replacing the subtree", () => {
+        const fp = fixture("patch.json", {group: {a: 0, b: 2}});
+        new Settings(fp).patch({group: {a: 1}});
+        assert.deepEqual(read(fp), {group: {a: 1, b: 2}});
+    });
+
+    test("put still replaces the subtree", () => {
+        const fp = fixture("patch.json", {group: {a: 0, b: 2}});
+        new Settings(fp).put({group: {a: 1}});
+        assert.deepEqual(read(fp), {group: {a: 1}});
+    });
+
+    test("merges a plain object at a dot-path leaf", () => {
+        const fp = fixture("patch.json", {group: {inner: {a: 0, b: 2}}});
+        new Settings(fp).patch({"group.inner": {a: 1}});
+        assert.deepEqual(read(fp), {group: {inner: {a: 1, b: 2}}});
+    });
+
+    test("recurses beyond one level", () => {
+        const fp = fixture("patch.json", {group: {a: {c: 2}}});
+        new Settings(fp).patch({group: {a: {b: 1}}});
+        assert.deepEqual(read(fp), {group: {a: {b: 1, c: 2}}});
+    });
+
+    test("replaces arrays, null and primitives", () => {
+        const fp = fixture("patch.json", {list: [1, 2], group: {a: 1}, other: {b: 1}});
+        new Settings(fp).patch({list: [3], group: null, other: "plain"});
+        assert.deepEqual(read(fp), {list: [3], group: null, other: "plain"});
+    });
+
+    test("replaces a plain object with a class instance rather than merging", () => {
+        const fp = fixture("patch.json", {when: {a: 1}});
+        new Settings(fp).patch({when: new Date("2020-01-02T03:04:05.000Z")});
+        assert.deepEqual(read(fp), {when: "2020-01-02T03:04:05.000Z"});
+    });
+
+    test("creates a missing target as-is", () => {
+        const fp = fixture("patch.json", {other: 1});
+        new Settings(fp).patch({group: {a: {b: 1}}});
+        assert.deepEqual(read(fp), {other: 1, group: {a: {b: 1}}});
+    });
+
+    test("reads fresh from disk and ignores in-memory state", () => {
+        const fp = fixture("patch.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.patch({c: 3});
+        assert.deepEqual(read(fp), {a: 1, c: 3});
+    });
+
+    test("creates the file from scratch when it does not exist", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "patch-new.json");
+        new Settings(fp).patch({foo: {bar: 1}});
+        assert.deepEqual(read(fp), {foo: {bar: 1}});
+    });
+
+    test("does not alias the caller's object into the written data", () => {
+        const fp = fixture("patch.json", {group: {a: 0, b: 2}});
+        const payload = {group: {a: 1}};
+        const s = new Settings(fp);
+        s.patch(payload);
+        payload.group.a = 999;
+        s.reload();
+        assert.deepEqual(s.raw(), {group: {a: 1, b: 2}});
+    });
+
+    test("does not mutate the object passed by the caller", () => {
+        const fp = fixture("patch.json", {group: {a: 0, b: 2}});
+        const payload = {group: {a: 1}};
+        new Settings(fp).patch(payload);
+        assert.deepEqual(payload, {group: {a: 1}});
+    });
+
+    test("ignores inherited (prototype-chain) keys", () => {
+        const fp = fixture("patch.json", {});
+        const params = Object.create({inherited: "nope"});
+        params.own = "yes";
+        new Settings(fp).patch(params);
+        const raw = read(fp);
+        assert.equal(raw.own, "yes");
+        assert.equal("inherited" in raw, false);
+    });
+
+    test("does not touch the in-memory settings", () => {
+        const fp = fixture("patch.json", {a: 1});
+        const s = new Settings(fp);
+        s.patch({b: {c: 2}});
+        assert.deepEqual(s.raw(), {a: 1});
+    });
+});
+
 describe("reload parse-skip", () => {
     test("does not parse again when the file is unchanged", (t) => {
         const fp = fixture("s.json", {a: 1});
