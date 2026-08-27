@@ -23,6 +23,106 @@ export class Settings {
         this.reload();
     }
 
+    get(key, defaultValue = undefined) {
+        return _get(this._settings, key, defaultValue);
+    }
+
+    has(key) {
+        return _has(this._settings, key);
+    }
+
+    set(key, value) {
+        assertSafePath(key);
+        _set(this._settings, key, value);
+    }
+
+    merge(key, value) {
+        this._mergeInto(this._settings, key, value);
+    }
+
+    delete(key) {
+        assertSafePath(key);
+        _unset(this._settings, key);
+    }
+
+    clear() {
+        this._settings = {};
+    }
+
+    raw() {
+        return this._settings;
+    }
+
+    all() {
+        const result = {};
+        const flatten = (obj, prefix = '') => {
+            forOwn(obj, (value, key) => {
+                const newPath = prefix ? `${prefix}.${key}` : key;
+                if (isObject(value) && !Array.isArray(value) && !isEmpty(value)) {
+                    flatten(value, newPath);
+                } else {
+                    result[newPath] = value;
+                }
+            });
+        };
+        flatten(this._settings);
+        return result;
+    }
+
+    reload() {
+        const {ok, buffer, fileChecksum} = this._readFile();
+        if (!ok) {
+            return false;
+        }
+        if (fileChecksum === this._loadedFileChecksum) {
+            return true;
+        }
+        const parsed = this._parseBuffer(buffer);
+        if (!parsed.ok) {
+            return false;
+        }
+        this._settings = parsed.data;
+        this._loadedFileChecksum = fileChecksum;
+        return true;
+    }
+
+    save() {
+        withFileLock(this._file, () => {
+            this._loadedFileChecksum = this._writeFile(this._settings);
+        });
+    }
+
+    put(params) {
+        this._writeThrough((data) => forOwn(params, (value, key) => {
+            assertSafePath(key);
+            _set(data, key, value);
+        }));
+    }
+
+    patch(params) {
+        this._writeThrough((data) => forOwn(params, (value, key) => this._mergeInto(data, key, value)));
+    }
+
+    startPolling(intervalSeconds = 1) {
+        this.stopPolling();
+        this._timer = setInterval(() => this.reload(), intervalSeconds * 1000);
+    }
+
+    stopPolling() {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+    }
+
+    version() {
+        return checksum(JSON.stringify(sortDeep(JSON.parse(JSON.stringify(this._settings)))));
+    }
+
+    fileChecksum() {
+        return this._readFile().fileChecksum;
+    }
+
     _readFile() {
         try {
             const buffer = fs.readFileSync(this._file);
@@ -48,67 +148,6 @@ export class Settings {
         return checksum(json);
     }
 
-    reload() {
-        const {ok, buffer, fileChecksum} = this._readFile();
-        if (!ok) {
-            return false;
-        }
-        if (fileChecksum === this._loadedFileChecksum) {
-            return true;
-        }
-        const parsed = this._parseBuffer(buffer);
-        if (!parsed.ok) {
-            return false;
-        }
-        this._settings = parsed.data;
-        this._loadedFileChecksum = fileChecksum;
-        return true;
-    }
-
-    startPolling(intervalSeconds = 1) {
-        this.stopPolling();
-        this._timer = setInterval(() => this.reload(), intervalSeconds * 1000);
-    }
-
-    stopPolling() {
-        if (this._timer) {
-            clearInterval(this._timer);
-            this._timer = null;
-        }
-    }
-
-    get(key, defaultValue = undefined) {
-        return _get(this._settings, key, defaultValue);
-    }
-
-    has(key) {
-        return _has(this._settings, key);
-    }
-
-    set(key, value) {
-        assertSafePath(key);
-        _set(this._settings, key, value);
-    }
-
-    _mergeInto(target, key, value) {
-        assertSafePath(key);
-        assertSafeValue(value);
-        _set(target, key, mergeValue(_get(target, key), value));
-    }
-
-    merge(key, value) {
-        this._mergeInto(this._settings, key, value);
-    }
-
-    delete(key) {
-        assertSafePath(key);
-        _unset(this._settings, key);
-    }
-
-    clear() {
-        this._settings = {};
-    }
-
     _writeThrough(apply) {
         withFileLock(this._file, () => {
             const {ok, buffer} = this._readFile();
@@ -118,49 +157,10 @@ export class Settings {
         });
     }
 
-    put(params) {
-        this._writeThrough((data) => forOwn(params, (value, key) => {
-            assertSafePath(key);
-            _set(data, key, value);
-        }));
-    }
-
-    patch(params) {
-        this._writeThrough((data) => forOwn(params, (value, key) => this._mergeInto(data, key, value)));
-    }
-
-    save() {
-        withFileLock(this._file, () => {
-            this._loadedFileChecksum = this._writeFile(this._settings);
-        });
-    }
-
-    version() {
-        return checksum(JSON.stringify(sortDeep(JSON.parse(JSON.stringify(this._settings)))));
-    }
-
-    fileChecksum() {
-        return this._readFile().fileChecksum;
-    }
-
-    raw() {
-        return this._settings;
-    }
-
-    all() {
-        const result = {};
-        const flatten = (obj, prefix = '') => {
-            forOwn(obj, (value, key) => {
-                const newPath = prefix ? `${prefix}.${key}` : key;
-                if (isObject(value) && !Array.isArray(value) && !isEmpty(value)) {
-                    flatten(value, newPath);
-                } else {
-                    result[newPath] = value;
-                }
-            });
-        };
-        flatten(this._settings);
-        return result;
+    _mergeInto(target, key, value) {
+        assertSafePath(key);
+        assertSafeValue(value);
+        _set(target, key, mergeValue(_get(target, key), value));
     }
 
 }
