@@ -1,6 +1,8 @@
 import fs from "fs";
 import crypto from "crypto";
 import lockfile from "proper-lockfile";
+import isPlainObject from "es-toolkit/compat/isPlainObject";
+import mergeWith from "es-toolkit/compat/mergeWith";
 
 
 const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
@@ -67,6 +69,17 @@ export function writeFileAtomic(file, content) {
         fs.rmSync(temporary, {force: true});
         throw e;
     }
+}
+
+function replaceUnlessPlainObject(previous, value) {
+    return isPlainObject(value) ? undefined : value;
+}
+
+export function mergeValue(previous, value) {
+    if (!isPlainObject(value)) {
+        return value;
+    }
+    return mergeWith(isPlainObject(previous) ? previous : {}, value, replaceUnlessPlainObject);
 }
 
 export function checksum(input) {

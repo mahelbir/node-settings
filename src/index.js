@@ -7,7 +7,7 @@ import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
-import {checksum, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
+import {checksum, mergeValue, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
 
 
 export class Settings {
@@ -87,6 +87,14 @@ export class Settings {
 
     set(key, value) {
         _set(this._settings, key, value);
+    }
+
+    _mergeInto(target, key, value) {
+        _set(target, key, mergeValue(_get(target, key), value));
+    }
+
+    merge(key, value) {
+        this._mergeInto(this._settings, key, value);
     }
 
     delete(key) {

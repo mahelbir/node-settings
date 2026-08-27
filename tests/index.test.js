@@ -170,6 +170,77 @@ describe("Settings instance", () => {
     });
 });
 
+describe("merge", () => {
+    test("merges a plain object into the existing subtree", () => {
+        const s = new Settings(fixture("m.json", {group: {a: 0, b: 2}}));
+        s.merge("group", {a: 1});
+        assert.deepEqual(s.raw(), {group: {a: 1, b: 2}});
+    });
+
+    test("merges at a dot-path", () => {
+        const s = new Settings(fixture("m.json", {group: {inner: {a: 0, b: 2}}}));
+        s.merge("group.inner", {a: 1});
+        assert.deepEqual(s.raw(), {group: {inner: {a: 1, b: 2}}});
+    });
+
+    test("recurses beyond one level", () => {
+        const s = new Settings(fixture("m.json", {group: {a: {c: 2}}}));
+        s.merge("group", {a: {b: 1}});
+        assert.deepEqual(s.raw(), {group: {a: {b: 1, c: 2}}});
+    });
+
+    test("replaces arrays, null and primitives", () => {
+        const s = new Settings(fixture("m.json", {list: [1, 2], group: {a: 1}, other: {b: 1}}));
+        s.merge("list", [3]);
+        s.merge("group", null);
+        s.merge("other", "plain");
+        assert.deepEqual(s.raw(), {list: [3], group: null, other: "plain"});
+    });
+
+    test("replaces a plain object with a class instance rather than merging", () => {
+        const s = new Settings(fixture("m.json", {when: {a: 1}}));
+        s.merge("when", new Date("2020-01-02T03:04:05.000Z"));
+        assert.equal(s.get("when").toISOString(), "2020-01-02T03:04:05.000Z");
+    });
+
+    test("creates a missing target as-is", () => {
+        const s = new Settings(fixture("m.json", {other: 1}));
+        s.merge("group.a", {b: 1});
+        assert.deepEqual(s.raw(), {other: 1, group: {a: {b: 1}}});
+    });
+
+    test("does not write to the file until save", () => {
+        const fp = fixture("m.json", {group: {a: 0, b: 2}});
+        const before = fs.readFileSync(fp, "utf-8");
+        const s = new Settings(fp);
+        s.merge("group", {a: 1});
+        assert.equal(fs.readFileSync(fp, "utf-8"), before);
+        s.save();
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {group: {a: 1, b: 2}});
+    });
+
+    test("does not alias the caller's object into the settings", () => {
+        const s = new Settings(fixture("m.json", {}));
+        const value = {a: 1, nested: {x: 1}};
+        s.merge("group", value);
+        value.nested.x = 999;
+        assert.equal(s.get("group.nested.x"), 1);
+    });
+
+    test("set still replaces the whole subtree", () => {
+        const s = new Settings(fixture("m.json", {group: {a: 0, b: 2}}));
+        s.set("group", {a: 1});
+        assert.deepEqual(s.raw(), {group: {a: 1}});
+    });
+
+    test("changes version like set does", () => {
+        const s = new Settings(fixture("m.json", {group: {a: 0, b: 2}}));
+        const before = s.version();
+        s.merge("group", {a: 1});
+        assert.notEqual(s.version(), before);
+    });
+});
+
 describe("reload", () => {
     test("picks up external changes and returns true on success", () => {
         const fp = fixture("r.json", {key: "v1"});
