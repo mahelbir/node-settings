@@ -439,6 +439,86 @@ describe("patch", () => {
     });
 });
 
+describe("unsafe key rejection", () => {
+    const pollutionKeys = ["__proto__.x", "constructor.prototype.x", "a.constructor.prototype.x"];
+
+    afterEach(() => {
+        delete Object.prototype.x;
+    });
+
+    test("set throws on a polluting path and leaves the prototype clean", () => {
+        const s = new Settings(fixture("u.json", {}));
+        for (const key of pollutionKeys) {
+            assert.throws(() => s.set(key, 1), {name: "TypeError", message: /[Uu]nsafe key/});
+            assert.equal({}.x, undefined);
+        }
+    });
+
+    test("merge throws on a polluting path", () => {
+        const s = new Settings(fixture("u.json", {}));
+        assert.throws(() => s.merge("constructor.prototype.x", 1), {name: "TypeError", message: /[Uu]nsafe key/});
+        assert.equal({}.x, undefined);
+    });
+
+    test("delete throws on a polluting path and leaves the prototype intact", () => {
+        const s = new Settings(fixture("u.json", {}));
+        assert.throws(() => s.delete("constructor.prototype.toString"), TypeError);
+        assert.equal(typeof {}.toString, "function");
+    });
+
+    test("put and patch throw on a polluting path", () => {
+        const fp = fixture("u.json", {});
+        for (const key of pollutionKeys) {
+            assert.throws(() => new Settings(fp).put({[key]: 1}), TypeError);
+            assert.throws(() => new Settings(fp).patch({[key]: 1}), TypeError);
+            assert.equal({}.x, undefined);
+        }
+    });
+
+    test("leaves the file untouched when a key is rejected", () => {
+        const fp = fixture("u.json", {a: 1});
+        const before = fs.readFileSync(fp, "utf-8");
+        assert.throws(() => new Settings(fp).put({b: 2, "constructor.prototype.x": 1}), TypeError);
+        assert.throws(() => new Settings(fp).patch({b: 2, "constructor.prototype.x": 1}), TypeError);
+        assert.equal(fs.readFileSync(fp, "utf-8"), before);
+    });
+
+    test("merge and patch throw on an unsafe key nested inside the value", () => {
+        const fp = fixture("u.json", {});
+        const params = JSON.parse('{"group": {"__proto__": {"x": 1}}}');
+        assert.throws(() => new Settings(fp).merge("group", params.group), TypeError);
+        assert.throws(() => new Settings(fp).patch(params), TypeError);
+        assert.equal({}.x, undefined);
+    });
+
+    test("rejects unsafe segments written in bracket notation", () => {
+        const s = new Settings(fixture("u.json", {}));
+        assert.throws(() => s.set('a["constructor"]["prototype"].x', 1), TypeError);
+        assert.equal({}.x, undefined);
+    });
+
+    test("rejects unsafe segments in an array path", () => {
+        const s = new Settings(fixture("u.json", {}));
+        assert.throws(() => s.set(["constructor", "prototype", "x"], 1), TypeError);
+        assert.equal({}.x, undefined);
+    });
+
+    test("allows keys that merely contain an unsafe word as a substring", () => {
+        const fp = fixture("u.json", {});
+        const s = new Settings(fp);
+        s.set("constructorName", "ok");
+        s.set("group.prototypes.first", 1);
+        s.save();
+        s.put({myConstructor: "fine"});
+        s.patch({deep: {__proto__x: 2}});
+        s.reload();
+        assert.equal(s.get("constructorName"), "ok");
+        assert.equal(s.get("group.prototypes.first"), 1);
+        assert.equal(s.get("myConstructor"), "fine");
+        assert.equal(s.get("deep.__proto__x"), 2);
+    });
+});
+
 describe("reload parse-skip", () => {
     test("does not parse again when the file is unchanged", (t) => {
         const fp = fixture("s.json", {a: 1});

@@ -7,7 +7,7 @@ import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
-import {checksum, mergeValue, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
+import {assertSafePath, assertSafeValue, checksum, mergeValue, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
 
 
 export class Settings {
@@ -86,10 +86,13 @@ export class Settings {
     }
 
     set(key, value) {
+        assertSafePath(key);
         _set(this._settings, key, value);
     }
 
     _mergeInto(target, key, value) {
+        assertSafePath(key);
+        assertSafeValue(value);
         _set(target, key, mergeValue(_get(target, key), value));
     }
 
@@ -98,6 +101,7 @@ export class Settings {
     }
 
     delete(key) {
+        assertSafePath(key);
         _unset(this._settings, key);
     }
 
@@ -116,6 +120,7 @@ export class Settings {
 
     put(params) {
         this._writeThrough((data) => forOwn(params, (value, key) => {
+            assertSafePath(key);
             _set(data, key, value);
         }));
     }

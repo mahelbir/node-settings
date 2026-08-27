@@ -3,8 +3,10 @@ import crypto from "crypto";
 import lockfile from "proper-lockfile";
 import isPlainObject from "es-toolkit/compat/isPlainObject";
 import mergeWith from "es-toolkit/compat/mergeWith";
+import toPath from "es-toolkit/compat/toPath";
 
 
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
 const RENAME_RETRY_LIMIT = 10;
 const LOCK_OPTIONS = {realpath: false, stale: 2000};
@@ -68,6 +70,28 @@ export function writeFileAtomic(file, content) {
     } catch (e) {
         fs.rmSync(temporary, {force: true});
         throw e;
+    }
+}
+
+export function assertSafeKey(key) {
+    if (UNSAFE_KEYS.has(key)) {
+        throw new TypeError(`Unsafe key segment "${key}" is not allowed`);
+    }
+}
+
+export function assertSafePath(path) {
+    for (const key of toPath(path)) {
+        assertSafeKey(key);
+    }
+}
+
+export function assertSafeValue(value) {
+    if (!isPlainObject(value)) {
+        return;
+    }
+    for (const key of Object.keys(value)) {
+        assertSafeKey(key);
+        assertSafeValue(value[key]);
     }
 }
 
