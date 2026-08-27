@@ -31,7 +31,7 @@
     "relock": "rm -rf node_modules package-lock.json && NODE_ENV= npm install --include=dev --include=optional"
   },
   "dependencies": {
-    "es-toolkit": "^1.50.0",
+    "es-toolkit": "^1.51.0",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
