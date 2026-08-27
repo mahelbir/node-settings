@@ -93,6 +93,10 @@ export class Settings {
         _unset(this._settings, key);
     }
 
+    clear() {
+        this._settings = {};
+    }
+
     put(params) {
         withFileLock(this._file, () => {
             const {ok, buffer} = this._readFile();

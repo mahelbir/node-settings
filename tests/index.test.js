@@ -105,6 +105,24 @@ describe("Settings instance", () => {
         assert.equal(s.get("removeme"), undefined);
     });
 
+    test("clear empties the in-memory settings", () => {
+        const fp = fixture("s.json", {a: {b: 1}, c: 2});
+        const s = new Settings(fp);
+        s.clear();
+        assert.deepEqual(s.raw(), {});
+        assert.equal(s.has("a.b"), false);
+    });
+
+    test("clear leaves the file untouched until save", () => {
+        const fp = fixture("s.json", {a: 1});
+        const before = fs.readFileSync(fp, "utf-8");
+        const s = new Settings(fp);
+        s.clear();
+        assert.equal(fs.readFileSync(fp, "utf-8"), before);
+        s.save();
+        assert.equal(fs.readFileSync(fp, "utf-8"), "{}");
+    });
+
     test("save persists current state as indented JSON", () => {
         const fp = fixture("s.json", {});
         const s = new Settings(fp);
