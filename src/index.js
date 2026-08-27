@@ -84,7 +84,7 @@ export class Settings {
         _set(this._settings, key, value);
     }
 
-    unset(key) {
+    delete(key) {
         _unset(this._settings, key);
     }
 

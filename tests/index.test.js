@@ -73,10 +73,10 @@ describe("Settings instance", () => {
         assert.equal(s.get("a.b.c"), 42);
     });
 
-    test("unset removes a previously stored key", () => {
+    test("delete removes a previously stored key", () => {
         const fp = fixture("s.json", {removeme: 1});
         const s = new Settings(fp);
-        s.unset("removeme");
+        s.delete("removeme");
         assert.equal(s.get("removeme"), undefined);
     });
 
@@ -362,12 +362,12 @@ describe("version", () => {
         assert.notEqual(a.version(), b.version());
     });
 
-    test("changes after set and returns to the original after unset", () => {
+    test("changes after set and returns to the original after delete", () => {
         const s = new Settings(fixture("s.json", {a: 1}));
         const initial = s.version();
         s.set("b", 2);
         assert.notEqual(s.version(), initial);
-        s.unset("b");
+        s.delete("b");
         assert.equal(s.version(), initial);
     });
 
