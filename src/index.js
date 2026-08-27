@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import _get from "es-toolkit/compat/get";
+import _has from "es-toolkit/compat/has";
 import _set from "es-toolkit/compat/set";
 import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
@@ -78,6 +79,10 @@ export class Settings {
 
     get(key, defaultValue = undefined) {
         return _get(this._settings, key, defaultValue);
+    }
+
+    has(key) {
+        return _has(this._settings, key);
     }
 
     set(key, value) {

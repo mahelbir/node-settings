@@ -73,6 +73,31 @@ describe("Settings instance", () => {
         assert.equal(s.get("a.b.c"), 42);
     });
 
+    test("has reports whether a deep key exists", () => {
+        const fp = fixture("s.json", {a: {b: 1}, list: [1]});
+        const s = new Settings(fp);
+        assert.equal(s.has("a.b"), true);
+        assert.equal(s.has("list[0]"), true);
+        assert.equal(s.has("a.c"), false);
+        assert.equal(s.has("missing.deep.key"), false);
+    });
+
+    test("has distinguishes a stored undefined from a missing key", () => {
+        const fp = fixture("s.json", {});
+        const s = new Settings(fp);
+        s.set("blank", undefined);
+        assert.equal(s.has("blank"), true);
+        assert.equal(s.get("blank"), undefined);
+        assert.equal(s.has("absent"), false);
+    });
+
+    test("has returns false after delete", () => {
+        const fp = fixture("s.json", {gone: 1});
+        const s = new Settings(fp);
+        s.delete("gone");
+        assert.equal(s.has("gone"), false);
+    });
+
     test("delete removes a previously stored key", () => {
         const fp = fixture("s.json", {removeme: 1});
         const s = new Settings(fp);
