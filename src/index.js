@@ -7,7 +7,7 @@ import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
-import {assertSafePath, assertSafeValue, checksum, mergeValue, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
+import {assertSafePath, checksum, mergeValue, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
 
 
 export class Settings {
@@ -34,19 +34,23 @@ export class Settings {
     set(key, value) {
         assertSafePath(key);
         _set(this._settings, key, value);
+        this._markDirty();
     }
 
     merge(key, value) {
         this._mergeInto(this._settings, key, value);
+        this._markDirty();
     }
 
     delete(key) {
         assertSafePath(key);
         _unset(this._settings, key);
+        this._markDirty();
     }
 
     clear() {
         this._settings = {};
+        this._markDirty();
     }
 
     raw() {
@@ -70,15 +74,15 @@ export class Settings {
     }
 
     reload() {
-        const {ok, buffer, fileChecksum} = this._readFile();
-        if (!ok) {
+        const {isOk, buffer, fileChecksum} = this._readFile();
+        if (!isOk) {
             return false;
         }
         if (fileChecksum === this._loadedFileChecksum) {
             return true;
         }
         const parsed = this._parseBuffer(buffer);
-        if (!parsed.ok) {
+        if (!parsed.isOk) {
             return false;
         }
         this._settings = parsed.data;
@@ -123,22 +127,26 @@ export class Settings {
         return this._readFile().fileChecksum;
     }
 
+    _markDirty() {
+        this._loadedFileChecksum = null;
+    }
+
     _readFile() {
         try {
             const buffer = fs.readFileSync(this._file);
-            return {ok: true, buffer, fileChecksum: checksum(buffer)};
+            return {isOk: true, buffer, fileChecksum: checksum(buffer)};
         } catch (e) {
             console.error("Settings.read", e);
-            return {ok: false, buffer: null, fileChecksum: null};
+            return {isOk: false, buffer: null, fileChecksum: null};
         }
     }
 
     _parseBuffer(buffer) {
         try {
-            return {ok: true, data: JSON.parse(buffer.toString("utf-8"))};
+            return {isOk: true, data: JSON.parse(buffer.toString("utf-8"))};
         } catch (e) {
             console.error("Settings.parse", e);
-            return {ok: false, data: {}};
+            return {isOk: false, data: {}};
         }
     }
 
@@ -150,8 +158,8 @@ export class Settings {
 
     _writeThrough(apply) {
         withFileLock(this._file, () => {
-            const {ok, buffer} = this._readFile();
-            const data = ok ? this._parseBuffer(buffer).data : {};
+            const {isOk, buffer} = this._readFile();
+            const data = isOk ? this._parseBuffer(buffer).data : {};
             apply(data);
             this._writeFile(data);
         });
@@ -159,7 +167,6 @@ export class Settings {
 
     _mergeInto(target, key, value) {
         assertSafePath(key);
-        assertSafeValue(value);
         _set(target, key, mergeValue(_get(target, key), value));
     }
 

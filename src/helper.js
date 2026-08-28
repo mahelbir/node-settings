@@ -1,6 +1,7 @@
 import fs from "fs";
 import crypto from "crypto";
 import lockfile from "proper-lockfile";
+import cloneDeep from "es-toolkit/compat/cloneDeep";
 import isPlainObject from "es-toolkit/compat/isPlainObject";
 import mergeWith from "es-toolkit/compat/mergeWith";
 import toPath from "es-toolkit/compat/toPath";
@@ -85,23 +86,29 @@ export function assertSafePath(path) {
     }
 }
 
-export function assertSafeValue(value) {
+export function assertSafeValue(value, ancestors = new WeakSet()) {
     if (!isPlainObject(value)) {
         return;
     }
+    if (ancestors.has(value)) {
+        throw new TypeError("Circular reference is not allowed in a merged value");
+    }
+    ancestors.add(value);
     for (const key of Object.keys(value)) {
         assertSafeKey(key);
-        assertSafeValue(value[key]);
+        assertSafeValue(value[key], ancestors);
     }
+    ancestors.delete(value);
 }
 
 function replaceUnlessPlainObject(previous, value) {
-    return isPlainObject(value) ? undefined : value;
+    return isPlainObject(value) ? undefined : cloneDeep(value);
 }
 
 export function mergeValue(previous, value) {
+    assertSafeValue(value);
     if (!isPlainObject(value)) {
-        return value;
+        return cloneDeep(value);
     }
     return mergeWith(isPlainObject(previous) ? previous : {}, value, replaceUnlessPlainObject);
 }

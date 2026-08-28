@@ -519,6 +519,122 @@ describe("unsafe key rejection", () => {
     });
 });
 
+describe("reload after in-memory mutation", () => {
+    test("clear then reload restores the file content", () => {
+        const fp = fixture("dirty.json", {a: 1, b: 2});
+        const s = new Settings(fp);
+        s.clear();
+        assert.equal(s.reload(), true);
+        assert.deepEqual(s.raw(), {a: 1, b: 2});
+    });
+
+    test("set then reload discards the unsaved change", () => {
+        const fp = fixture("dirty.json", {a: 1, b: 2});
+        const s = new Settings(fp);
+        s.set("a", 999);
+        s.reload();
+        assert.deepEqual(s.raw(), {a: 1, b: 2});
+    });
+
+    test("delete then reload restores the removed key", () => {
+        const fp = fixture("dirty.json", {a: 1, b: 2});
+        const s = new Settings(fp);
+        s.delete("b");
+        s.reload();
+        assert.deepEqual(s.raw(), {a: 1, b: 2});
+    });
+
+    test("merge then reload discards the unsaved change", () => {
+        const fp = fixture("dirty.json", {group: {a: 1}});
+        const s = new Settings(fp);
+        s.merge("group", {b: 2});
+        s.reload();
+        assert.deepEqual(s.raw(), {group: {a: 1}});
+    });
+
+    test("polling picks the file back up after an in-memory mutation", (t) => {
+        t.mock.timers.enable({apis: ["setInterval"]});
+        const fp = fixture("dirty.json", {a: 1});
+        const s = new Settings(fp);
+        s.startPolling(1);
+        try {
+            s.clear();
+            t.mock.timers.tick(1000);
+            assert.deepEqual(s.raw(), {a: 1});
+        } finally {
+            s.stopPolling();
+        }
+    });
+
+    test("save then reload still skips the parse", (t) => {
+        const fp = fixture("dirty.json", {a: 1});
+        const s = new Settings(fp);
+        s.set("b", 2);
+        s.save();
+        const spy = t.mock.method(JSON, "parse");
+        assert.equal(s.reload(), true);
+        assert.equal(spy.mock.callCount(), 0);
+        assert.deepEqual(s.raw(), {a: 1, b: 2});
+    });
+});
+
+describe("merge value isolation", () => {
+    test("does not alias an array into the settings", () => {
+        const s = new Settings(fixture("iso.json", {}));
+        const list = [1, 2];
+        s.merge("list", list);
+        list.push(999);
+        assert.deepEqual(s.get("list"), [1, 2]);
+    });
+
+    test("does not alias an array nested inside a merged object", () => {
+        const s = new Settings(fixture("iso.json", {}));
+        const value = {list: [1, 2]};
+        s.merge("group", value);
+        value.list.push(999);
+        assert.deepEqual(s.get("group.list"), [1, 2]);
+    });
+
+    test("does not alias a class instance into the settings", () => {
+        const s = new Settings(fixture("iso.json", {}));
+        const when = new Date("2020-01-02T03:04:05.000Z");
+        s.merge("when", when);
+        when.setFullYear(1999);
+        assert.equal(s.get("when").toISOString(), "2020-01-02T03:04:05.000Z");
+    });
+
+    test("keeps set aliasing, which is its documented behavior", () => {
+        const s = new Settings(fixture("iso.json", {}));
+        const list = [1, 2];
+        s.set("list", list);
+        list.push(999);
+        assert.deepEqual(s.get("list"), [1, 2, 999]);
+    });
+});
+
+describe("circular values", () => {
+    test("merge throws a TypeError instead of overflowing the stack", () => {
+        const s = new Settings(fixture("circ.json", {}));
+        const value = {};
+        value.self = value;
+        assert.throws(() => s.merge("x", value), TypeError);
+    });
+
+    test("patch throws a TypeError instead of overflowing the stack", () => {
+        const fp = fixture("circ.json", {});
+        const value = {};
+        value.self = value;
+        assert.throws(() => new Settings(fp).patch({x: value}), TypeError);
+    });
+
+    test("a value shared twice without a cycle is accepted", () => {
+        const s = new Settings(fixture("circ.json", {}));
+        const shared = {n: 1};
+        s.merge("group", {a: shared, b: shared});
+        assert.deepEqual(s.get("group"), {a: {n: 1}, b: {n: 1}});
+    });
+});
+
 describe("reload parse-skip", () => {
     test("does not parse again when the file is unchanged", (t) => {
         const fp = fixture("s.json", {a: 1});
