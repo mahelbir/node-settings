@@ -6,6 +6,7 @@ import _set from "es-toolkit/compat/set";
 import _unset from "es-toolkit/compat/unset";
 import forOwn from "es-toolkit/compat/forOwn";
 import isObject from "es-toolkit/compat/isObject";
+import isPlainObject from "es-toolkit/compat/isPlainObject";
 import isEmpty from "es-toolkit/compat/isEmpty";
 import {assertSafePath, checksum, mergeValue, sortDeep, withFileLock, writeFileAtomic} from "./helper.js";
 
@@ -92,6 +93,7 @@ export class Settings {
 
     save() {
         withFileLock(this._file, () => {
+            this._readForWrite();
             this._loadedFileChecksum = this._writeFile(this._settings);
         });
     }
@@ -137,7 +139,7 @@ export class Settings {
             return {isOk: true, buffer, fileChecksum: checksum(buffer)};
         } catch (e) {
             console.error("Settings.read", e);
-            return {isOk: false, buffer: null, fileChecksum: null};
+            return {isOk: false, buffer: null, fileChecksum: null, error: e};
         }
     }
 
@@ -146,8 +148,20 @@ export class Settings {
             return {isOk: true, data: JSON.parse(buffer.toString("utf-8"))};
         } catch (e) {
             console.error("Settings.parse", e);
-            return {isOk: false, data: {}};
+            return {isOk: false, data: null, error: e};
         }
+    }
+
+    _readForWrite() {
+        const read = this._readFile();
+        if (!read.isOk && read.error.code === "ENOENT") {
+            return {};
+        }
+        const parsed = read.isOk ? this._parseBuffer(read.buffer) : read;
+        if (!parsed.isOk || !isPlainObject(parsed.data)) {
+            throw new Error(`Settings file is not a readable JSON object, refusing to overwrite: ${this._file}`, {cause: parsed.error});
+        }
+        return parsed.data;
     }
 
     _writeFile(data) {
@@ -158,8 +172,7 @@ export class Settings {
 
     _writeThrough(apply) {
         withFileLock(this._file, () => {
-            const {isOk, buffer} = this._readFile();
-            const data = isOk ? this._parseBuffer(buffer).data : {};
+            const data = this._readForWrite();
             apply(data);
             this._writeFile(data);
         });

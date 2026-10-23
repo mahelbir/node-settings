@@ -439,6 +439,60 @@ describe("patch", () => {
     });
 });
 
+describe("writes on an unusable file", () => {
+    const unusableContents = {
+        "invalid JSON": '{"a": 1,',
+        "an empty file": "",
+        "a null root": "null",
+        "an array root": "[1, 2]",
+        "a number root": "42",
+    };
+    const writes = {
+        put: (s) => s.put({b: 2}),
+        patch: (s) => s.patch({b: 2}),
+        save: (s) => s.save(),
+    };
+
+    for (const [method, write] of Object.entries(writes)) {
+        for (const [label, content] of Object.entries(unusableContents)) {
+            test(`${method} throws on ${label} and leaves the file untouched`, (t) => {
+                suppressConsole(t, "error");
+                const fp = path.join(tmpDir, "s.json");
+                fs.writeFileSync(fp, content);
+                assert.throws(() => write(new Settings(fp)), {message: /refusing to overwrite/});
+                assert.equal(fs.readFileSync(fp, "utf-8"), content);
+                assert.deepEqual(fs.readdirSync(tmpDir), ["s.json"]);
+            });
+        }
+
+        test(`${method} throws on a file it may not read`, {skip: process.getuid?.() === 0}, (t) => {
+            suppressConsole(t, "error");
+            const fp = fixture("s.json", {a: 1});
+            const s = new Settings(fp);
+            fs.chmodSync(fp, 0o000);
+            assert.throws(() => write(s), (e) => e.cause?.code === "EACCES");
+            fs.chmodSync(fp, 0o600);
+            assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1});
+        });
+    }
+
+    test("keeps the parse error as the cause", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "s.json");
+        fs.writeFileSync(fp, '{"a": 1,');
+        assert.throws(() => new Settings(fp).patch({b: 2}), (e) => e.cause instanceof SyntaxError);
+    });
+
+    test("save still creates a missing file", (t) => {
+        suppressConsole(t, "error");
+        const fp = path.join(tmpDir, "s.json");
+        const s = new Settings(fp);
+        s.set("a", 1);
+        s.save();
+        assert.deepEqual(JSON.parse(fs.readFileSync(fp, "utf-8")), {a: 1});
+    });
+});
+
 describe("unsafe key rejection", () => {
     const pollutionKeys = ["__proto__.x", "constructor.prototype.x", "a.constructor.prototype.x"];
 

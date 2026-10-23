@@ -12,8 +12,7 @@ capability.
 npm i @mahelbir/settings
 ```
 
-Ships dual **ESM** and **CommonJS** builds — import it whichever way your
-project uses:
+Ships dual ESM and CommonJS builds, so import it whichever way your project uses:
 
 ```javascript
 import {Settings} from "@mahelbir/settings";           // ESM
@@ -24,7 +23,7 @@ const {Settings} = require("@mahelbir/settings");  // CommonJS
 
 ### Instance Mode
 
-Create a `Settings` instance to read and manipulate a specific JSON file.
+Create a `Settings` instance to read and change a JSON file.
 
 ```javascript
 import {Settings} from "@mahelbir/settings";
@@ -43,8 +42,8 @@ in the [API](#api) table.
 
 ### Auto-Refresh (Polling)
 
-Keep an instance in sync with the file on disk. Ideal for long-running processes where config may be
-updated externally. Polling re-reads the file on an interval; a failed read keeps the last good data.
+Keep an instance in sync with the file on disk, for long-running processes where something else may
+edit the config. Polling re-reads the file on an interval; a failed read keeps the last good data.
 
 ```javascript
 import {Settings} from "@mahelbir/settings";
@@ -57,8 +56,8 @@ config.get("feature.enabled");           // always reflects the latest successfu
 config.stopPolling();                    // stop refreshing when you're done
 ```
 
-Share a single polling instance across your app by exporting it from a module — Node's module cache
-makes it a singleton (CommonJS `require` works the same):
+Share a single polling instance across your app by exporting it from a module. Node's module cache
+makes it a singleton, and CommonJS `require` works the same way:
 
 ```javascript
 // config.js
@@ -78,10 +77,9 @@ config.get("feature.enabled");
 
 ### Write-Through (`put` / `patch`)
 
-`put` and `patch` skip the in-memory copy: they read the **current** on-disk content fresh, apply
-`params`, and write atomically under a cross-process lock — so two processes writing different keys
-don't overwrite each other. A missing or corrupt file is treated as an empty object. What they write
-surfaces in memory on the next `reload()` or poll tick.
+`put` and `patch` skip the in-memory copy. They read the file fresh, apply `params`, and write
+atomically under a cross-process lock, so two processes writing different keys don't overwrite each
+other. What they write shows up in memory on the next `reload()` or poll tick.
 
 ## Replace vs merge
 
@@ -98,14 +96,15 @@ config.patch({app: {version: "2.0"}});   // {"app": {"name": "demo", "version": 
 | `put({job: {count: 9}})`   | file (fresh) | **replaces** the subtree        |
 | `patch({job: {count: 9}})` | file (fresh) | **merges** into the subtree     |
 
-`merge` and `patch` deep-merge plain objects and replace everything else — arrays, `null`, primitives
-and class instances. Keys can be dot paths; at a leaf there is nothing to merge, so each pair agrees
-there and they differ only on plain object values.
+`merge` and `patch` deep-merge plain objects and replace everything else: arrays, `null`, primitives
+and class instances. Keys can be dot paths. At a leaf there is nothing to merge, so `set` and `merge`
+(or `put` and `patch`) give the same result there and differ only on plain object values.
 
 ## API
 
 All methods below the constructor work on the in-memory copy, except `put` and `patch`, which go
-straight to the file.
+straight to the file. `save`, `put` and `patch` create a missing file. If the file exists but can't be
+read as a JSON object, they throw and leave it untouched.
 
 | Method                           | Description                                                                   |
 |----------------------------------|-------------------------------------------------------------------------------|
