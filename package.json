@@ -1,6 +1,6 @@
 {
   "name": "@mahelbir/settings",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": false,
   "description": "Lightweight settings manager with deep get/set, pluggable stores, schema validation and auto-refresh.",
   "keywords": [
